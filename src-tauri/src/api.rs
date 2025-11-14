@@ -620,10 +620,7 @@ pub async fn chat_stream_response(
     let mut full_response = String::new();
     let mut buffer = String::new();
     let mut usage: Option<serde_json::Value> = None;
-    let mut activity_reported = false;
-    let activity_app = app.clone();
-    let activity_model = api_config.model.clone();
-    let activity_app_version = app.package_info().version.to_string();
+    let mut stream_started = false;
 
     while let Some(chunk) = stream.next().await {
         match chunk {
@@ -668,24 +665,7 @@ pub async fn chat_stream_response(
                                                 full_response.push_str(content);
                                                 // Emit just the content to frontend
                                                 let _ = app.emit("chat_stream_chunk", content);
-                                                if !activity_reported {
-                                                    activity_reported = true;
-                                                    tauri::async_runtime::spawn({
-                                                        let activity_app = activity_app.clone();
-                                                        let activity_model = activity_model.clone();
-                                                        let activity_app_version = activity_app_version.clone();
-                                                        let captured_metrics = usage.clone();
-                                                        async move {
-                                                            let _ = user_activity(
-                                                                activity_app,
-                                                                captured_metrics,
-                                                                activity_model,
-                                                                activity_app_version,
-                                                            )
-                                                            .await;
-                                                        }
-                                                    });
-                                                }
+                                                stream_started = true;
                                             }
                                         }
                                     }
@@ -717,6 +697,24 @@ pub async fn chat_stream_response(
 
     // Emit completion event
     let _ = app.emit("chat_stream_complete", &full_response);
+
+    if stream_started && !full_response.is_empty() {
+        tauri::async_runtime::spawn({
+            let activity_app = app.clone();
+            let activity_model = api_config.model.clone();
+            let activity_app_version = app.package_info().version.to_string();
+            let captured_metrics = usage.clone();
+            async move {
+                let _ = user_activity(
+                    activity_app,
+                    captured_metrics,
+                    activity_model,
+                    activity_app_version,
+                )
+                .await;
+            }
+        });
+    }
 
     Ok(full_response)
 }
