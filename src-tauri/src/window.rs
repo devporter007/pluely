@@ -85,22 +85,7 @@ pub fn set_window_height(window: tauri::WebviewWindow, height: u32) -> Result<()
 
 #[tauri::command]
 pub fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
-    // Check if dashboard window already exists
-    if let Some(dashboard_window) = app.get_webview_window("dashboard") {
-        // Window exists, just focus and show it
-        dashboard_window
-            .set_focus()
-            .map_err(|e| format!("Failed to focus dashboard window: {}", e))?;
-        dashboard_window
-            .show()
-            .map_err(|e| format!("Failed to show dashboard window: {}", e))?;
-    } else {
-        // Window doesn't exist, create it with platform-aware defaults
-        create_dashboard_window(&app)
-            .map_err(|e| format!("Failed to create dashboard window: {}", e))?;
-    }
-
-    Ok(())
+    show_dashboard_window(&app)
 }
 
 #[tauri::command]
@@ -127,9 +112,8 @@ pub fn toggle_dashboard(app: tauri::AppHandle) -> Result<(), String> {
             }
         }
     } else {
-        // Window doesn't exist, create it
-        create_dashboard_window(&app)
-            .map_err(|e| format!("Failed to create dashboard window: {}", e))?;
+        // Window doesn't exist, create and show it
+        show_dashboard_window(&app)?;
     }
 
     Ok(())
@@ -190,20 +174,51 @@ pub fn create_dashboard_window<R: Runtime>(
         .inner_size(800.0, 600.0)
         .min_inner_size(800.0, 600.0)
         .content_protected(true)
-        .visible(true);
+        .visible(false);
 
     let window = base_builder.build()?;
 
-    // Prevent window from being destroyed on close - just hide it instead
+    // Set up close event handler - hide window instead of destroying it
+    setup_dashboard_close_handler(&window);
+
+    Ok(window)
+}
+
+/// Sets up the close event handler for the dashboard window
+fn setup_dashboard_close_handler<R: Runtime>(window: &WebviewWindow<R>) {
     let window_clone = window.clone();
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            // Prevent the window from closing
+            // Prevent the window from being destroyed
             api.prevent_close();
             // Hide the window instead
-            let _ = window_clone.hide();
+            if let Err(e) = window_clone.hide() {
+                eprintln!("Failed to hide dashboard window on close: {}", e);
+            }
         }
     });
+}
 
-    Ok(window)
+/// Shows the dashboard window and brings it to focus
+pub fn show_dashboard_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    if let Some(dashboard_window) = app.get_webview_window("dashboard") {
+        // Window exists, show and focus it
+        dashboard_window
+            .show()
+            .map_err(|e| format!("Failed to show dashboard window: {}", e))?;
+        dashboard_window
+            .set_focus()
+            .map_err(|e| format!("Failed to focus dashboard window: {}", e))?;
+    } else {
+        // Window doesn't exist, create it and then show it
+        let window = create_dashboard_window(app)
+            .map_err(|e| format!("Failed to create dashboard window: {}", e))?;
+        window
+            .show()
+            .map_err(|e| format!("Failed to show new dashboard window: {}", e))?;
+        window
+            .set_focus()
+            .map_err(|e| format!("Failed to focus new dashboard window: {}", e))?;
+    }
+    Ok(())
 }

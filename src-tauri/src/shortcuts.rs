@@ -10,7 +10,7 @@ use tokio::time::{sleep, Duration};
 #[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
 
-use crate::window::create_dashboard_window;
+use crate::window::show_dashboard_window;
 // State for window visibility
 pub struct WindowVisibility {
     #[allow(dead_code)]
@@ -575,7 +575,6 @@ pub fn set_always_on_top<R: Runtime>(app: AppHandle<R>, enabled: bool) -> Result
 
 /// Handle toggle dashboard shortcut
 fn handle_toggle_dashboard<R: Runtime>(app: &AppHandle<R>) {
-    use tauri::Manager;
     if let Some(dashboard_window) = app.get_webview_window("dashboard") {
         match dashboard_window.is_visible() {
             Ok(true) => {
@@ -598,10 +597,10 @@ fn handle_toggle_dashboard<R: Runtime>(app: &AppHandle<R>) {
             }
         }
     } else {
-        // Window doesn't exist, create it
-        match create_dashboard_window(app) {
-            Ok(_) => eprintln!("Dashboard window created successfully"),
-            Err(e) => eprintln!("Failed to create dashboard window: {}", e),
+        // Window doesn't exist, create and show it
+        match show_dashboard_window(app) {
+            Ok(_) => eprintln!("Dashboard window created and shown successfully"),
+            Err(e) => eprintln!("Failed to create/show dashboard window: {}", e),
         }
     }
 }
