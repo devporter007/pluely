@@ -115,9 +115,7 @@ export function useSystemAudio() {
   const isSavingRef = useRef<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const [, setIsScreenshotLoading] = useState(false);
   const screenshotConfigRef = useRef(screenshotConfiguration);
-  const hasCheckedPermissionRef = useRef(false);
 
   useEffect(() => {
     screenshotConfigRef.current = screenshotConfiguration;
@@ -639,50 +637,12 @@ export function useSystemAudio() {
         try {
           // Prepare image list (auto-capture if configured) and include any pending screenshot captured via UI
           const imagesBase64: string[] = [];
-          const configForCapture = screenshotConfigRef.current;
 
           // Include pending screenshot captured via UI (e.g., Screenshot button)
           if (pendingScreenshotBase64) {
             imagesBase64.push(pendingScreenshotBase64);
           }
 
-          if (configForCapture?.enabled && configForCapture?.attachOnEveryRequest) {
-            setIsScreenshotLoading(true);
-            try {
-              const platform = navigator.platform.toLowerCase();
-              if (platform.includes("mac") && !hasCheckedPermissionRef.current) {
-                const {
-                  checkScreenRecordingPermission,
-                  requestScreenRecordingPermission,
-                } = await import("tauri-plugin-macos-permissions-api");
-
-                const hasPermission = await checkScreenRecordingPermission();
-                if (!hasPermission) {
-                  await requestScreenRecordingPermission();
-                  await new Promise((resolve) => setTimeout(resolve, 2000));
-                  const hasPermissionNow = await checkScreenRecordingPermission();
-                  if (!hasPermissionNow) {
-                    setError(
-                      "Screen Recording permission required. Please enable it by going to System Settings > Privacy & Security > Screen & System Audio Recording. Then restart the app."
-                    );
-                  }
-                }
-                hasCheckedPermissionRef.current = true;
-              }
-
-              const configForCapture = screenshotConfigRef.current;
-              const captured = await invoke("capture_to_base64", {
-                compressionEnabled: configForCapture.compressionEnabled ?? true,
-                compressionQuality: configForCapture.compressionQuality ?? 75,
-                compressionMaxDimension: configForCapture.compressionMaxDimension ?? 1600,
-              });
-              if (captured) imagesBase64.push(captured as string);
-            } catch (err) {
-              console.error("Failed to auto-capture screenshot:", err);
-            } finally {
-              setIsScreenshotLoading(false);
-            }
-          }
 
           // If we have a pending audio attachment for screenshot, attempt to transcribe it and append to the user message
           let audioBase64ForRequest: string | undefined = undefined;

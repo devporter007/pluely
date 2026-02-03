@@ -15,6 +15,7 @@ export const PageLayout = ({
   allowBackButton?: boolean;
   isMainTitle?: boolean;
 }) => {
+
   return (
     <div className="flex flex-1 flex-col">
       <header className="pt-8">

@@ -124,7 +124,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       mode: "manual",
       autoPrompt: "Analyze this screenshot and provide insights",
       enabled: true,
-      attachOnEveryRequest: false,
       // sensible defaults for compression
       compressionEnabled: true,
       compressionQuality: 75,
@@ -249,10 +248,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               parsed.autoPrompt ||
               "Analyze this screenshot and provide insights",
             enabled: parsed.enabled !== undefined ? parsed.enabled : false,
-            attachOnEveryRequest:
-              parsed.attachOnEveryRequest !== undefined
-                ? parsed.attachOnEveryRequest
-                : false,
             attachAudioWithScreenshot:
               parsed.attachAudioWithScreenshot !== undefined
                 ? parsed.attachAudioWithScreenshot

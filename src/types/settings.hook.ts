@@ -9,7 +9,6 @@ export interface UseSettingsReturn {
   handleScreenshotModeChange: (value: ScreenshotMode) => void;
   handleScreenshotPromptChange: (value: string) => void;
   handleScreenshotEnabledChange: (enabled: boolean) => void;
-  handleScreenshotAttachChange: (enabled: boolean) => void;
   handleAttachAudioWithScreenshotChange: (enabled: boolean) => void;
   handleScreenshotAudioModeChange: (mode: "last" | "record") => void;
   handleScreenshotAudioDurationChange: (seconds: number) => void;

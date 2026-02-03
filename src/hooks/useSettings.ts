@@ -61,14 +61,6 @@ export const useSettings = () => {
     );
   };
 
-  const handleScreenshotAttachChange = (enabled: boolean) => {
-    const newConfig = { ...screenshotConfiguration, attachOnEveryRequest: enabled };
-    setScreenshotConfiguration(newConfig);
-    safeLocalStorage.setItem(
-      STORAGE_KEYS.SCREENSHOT_CONFIG,
-      JSON.stringify(newConfig)
-    );
-  };
 
   const handleAttachAudioWithScreenshotChange = (enabled: boolean) => {
     const newConfig = { ...screenshotConfiguration, attachAudioWithScreenshot: enabled };
@@ -174,7 +166,6 @@ export const useSettings = () => {
     handleScreenshotModeChange,
     handleScreenshotPromptChange,
     handleScreenshotEnabledChange,
-    handleScreenshotAttachChange,
     handleAttachAudioWithScreenshotChange,
     handleScreenshotAudioModeChange,
     handleScreenshotAudioDurationChange,

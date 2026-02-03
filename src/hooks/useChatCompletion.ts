@@ -61,8 +61,7 @@ export const useChatCompletion = (
     allSttProviders,
     selectedAudioDevices,
     hasActiveLicense,
-    screenRecordingPermissionGranted,
-    setScreenRecordingPermission,
+
   } = useApp();
 
   const [state, setState] = useState<ChatCompletionState>({
@@ -184,157 +183,7 @@ export const useChatCompletion = (
       const signal = abortControllerRef.current.signal;
 
       try {
-        // If configured, capture a full-screen screenshot and attach it so it is sent along like other attachments
-        const configForCapture = screenshotConfigRef.current;
-        // Only auto-capture if there are no existing attached files (avoid capturing repeatedly)
-        let capturedScreenshotBase64: string | null = null;
-
-        if (
-          configForCapture?.enabled &&
-          configForCapture?.attachOnEveryRequest &&
-          state.attachedFiles.length === 0
-        ) {
-          // Extracted helper to keep the submit flow simple and avoid nested try/catch issues
-          const maybeAttachAutoScreenshot = async (): Promise<string | null> => {
-            setIsScreenshotLoading(true);
-            try {
-              const platform = navigator.platform.toLowerCase();
-              if (platform.includes("mac")) {
-                const {
-                  checkScreenRecordingPermission,
-                  requestScreenRecordingPermission,
-                } = await import("tauri-plugin-macos-permissions-api");
-
-                // Use global cached permission from App context when possible
-                if (!screenRecordingPermissionGranted) {
-                  const hasPermission = await checkScreenRecordingPermission();
-                  if (!hasPermission) {
-                    await requestScreenRecordingPermission();
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
-                    const hasPermissionNow = await checkScreenRecordingPermission();
-                    if (!hasPermissionNow) {
-                      // Ask user to open System Settings
-                      const openNow = window.confirm(
-                        "Screen Recording permission required. Open System Settings > Privacy & Security > Screen & System Audio Recording now?"
-                      );
-                      if (openNow) {
-                        try {
-                          const shellModule = await eval('import("@tauri-apps/api/shell")');
-                          if (shellModule?.open) {
-                            shellModule.open(
-                              "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
-                            );
-                          } else {
-                            window.open(
-                              "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
-                            );
-                          }
-                        } catch (err) {
-                          window.open(
-                            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
-                          );
-                        }
-                      }
-                      setState((prev) => ({
-                        ...prev,
-                        error:
-                          "Screen Recording permission required. Please enable it in System Settings and restart the app.",
-                      }));
-                      setScreenRecordingPermission(false);
-                      return null;
-                    } else {
-                      setScreenRecordingPermission(true);
-                    }
-                  } else {
-                    setScreenRecordingPermission(true);
-                  }
-                }
-
-                hasCheckedPermissionRef.current = true;
-              }
-
-              const config = screenshotConfigRef.current;
-              const captured = await invoke("capture_to_base64", {
-                compressionEnabled: config.compressionEnabled ?? true,
-                compressionQuality: config.compressionQuality ?? 75,
-                compressionMaxDimension: config.compressionMaxDimension ?? 1600,
-              });
-              if (captured) {
-                const base64str = captured as string;
-                try {
-                  const { isLikelyInvalidScreenshot } = await import("@/lib/utils");
-                  const invalid = await isLikelyInvalidScreenshot(base64str);
-                  if (invalid) {
-                    const openNow = window.confirm(
-                      "Captured image looks invalid (possibly blocked by macOS). Open System Settings > Privacy & Security > Screen & System Audio Recording now?"
-                    );
-                    if (openNow) {
-                      try {
-                        const shellModule = await eval('import("@tauri-apps/api/shell")');
-                        if (shellModule?.open) {
-                          shellModule.open(
-                            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
-                          );
-                        } else {
-                          window.open(
-                            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
-                          );
-                        }
-                      } catch (err) {
-                        window.open(
-                          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
-                        );
-                      }
-                    }
-                    setScreenRecordingPermission(false);
-                    return null;
-                  }
-
-                  // Only attach if we have room
-                  if (state.attachedFiles.length < MAX_FILES) {
-                    const attachedFile: AttachedFile = {
-                      id: Date.now().toString(),
-                      name: `screenshot_${Date.now()}.png`,
-                      type: "image/png",
-                      base64: base64str,
-                      size: base64str.length,
-                    };
-
-                    // Update UI attachments (so users can see it) but continue to send in the same flow
-                    setState((prev) => ({
-                      ...prev,
-                      attachedFiles: [...prev.attachedFiles, attachedFile],
-                      // Prefill prompt in auto mode
-                      input:
-                        configForCapture.mode === "auto"
-                          ? configForCapture.autoPrompt
-                          : prev.input,
-                    }));
-
-                    return base64str;
-                  } else {
-                    // If hit max files, set a non-blocking error and proceed without attaching
-                    setState((prev) => ({
-                      ...prev,
-                      error: `Max ${MAX_FILES} files attached. Screenshot not attached.`,
-                    }));
-                    return null;
-                  }
-                } catch (err) {
-                  console.error("Failed to auto-capture screenshot:", err);
-                  return null;
-                }
-              }
-
-              return null;
-            } finally {
-              setIsScreenshotLoading(false);
-            }
-          };
-
-          capturedScreenshotBase64 = await maybeAttachAutoScreenshot();
-        }
-
+        // auto-attach-to-every-request feature removed — screenshots will only be captured when explicitly requested (screenshot button / shortcut).
         // Prepare message history for the AI
         const messageHistory = (messages?.messages || []).map((msg) => ({
           role: msg.role,
@@ -352,9 +201,6 @@ export const useChatCompletion = (
         }
 
         // If we captured a screenshot earlier in this flow, include it as well
-        if (typeof capturedScreenshotBase64 === "string" && capturedScreenshotBase64) {
-          imagesBase64.push(capturedScreenshotBase64);
-        }
 
         const usePluelyAPI = await shouldUsePluelyAPI();
         // Check if AI provider is configured

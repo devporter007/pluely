@@ -16,7 +16,6 @@ export const ScreenshotConfigs = ({
   handleScreenshotModeChange,
   handleScreenshotPromptChange,
   handleScreenshotEnabledChange,
-  handleScreenshotAttachChange,
   handleAttachAudioWithScreenshotChange,
   handleScreenshotAudioModeChange,
   handleScreenshotAudioDurationChange,
@@ -132,25 +131,6 @@ export const ScreenshotConfigs = ({
           </div>
         )}
 
-        {/* Attach on every request toggle - visible when screenshot mode is enabled */}
-        {screenshotConfiguration.enabled && (
-          <>
-            <div className="flex justify-between items-center space-x-2 pt-3">
-              <div className="flex-1">
-                <Header
-                  title="Attach to every request"
-                  description="Automatically capture and attach a full-screen screenshot to every AI request when enabled."
-                />
-              </div>
-              <div className="flex items-center">
-                <Switch
-                  checked={!!screenshotConfiguration.attachOnEveryRequest}
-                  onCheckedChange={(checked) =>
-                    handleScreenshotAttachChange(checked)
-                  }
-                />
-              </div>
-            </div>
 
             {/* Compression settings - visible regardless of attach-on-every-request */}
             <div className="flex justify-between items-center space-x-2 pt-3">
@@ -230,7 +210,7 @@ export const ScreenshotConfigs = ({
             )}
 
             {/* Audio attachment options for screenshots */}
-            {screenshotConfiguration.attachOnEveryRequest && (
+            {screenshotConfiguration.enabled && (
               <div className="space-y-2 mt-3">
                 <div className="flex justify-between items-center space-x-2">
                   <div className="flex-1">
@@ -301,8 +281,6 @@ export const ScreenshotConfigs = ({
                 )}
               </div>
             )}
-          </>
-        )}
       </div>
 
       {/* Tips */}

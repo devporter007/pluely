@@ -44,8 +44,6 @@ export interface ScreenshotConfig {
   mode: ScreenshotMode;
   autoPrompt: string;
   enabled: boolean;
-  // When true, capture a full-screen screenshot and attach it to every AI request
-  attachOnEveryRequest?: boolean;
   // When true, also attach a short system audio recording when a screenshot is taken
   attachAudioWithScreenshot?: boolean;
   // Mode for audio attachment: 'last' = use most recent stt snippet, 'record' = record a short clip at screenshot time
