@@ -65,7 +65,7 @@ export const SystemAudio = (props: useSystemAudioType) => {
     scrollAreaRef,
   } = props;
 
-  const { hasActiveLicense, supportsImages } = useApp();
+  const { hasActiveLicense, supportsImages, screenRecordingPermissionGranted, setScreenRecordingPermission, screenshotConfiguration } = useApp();
 
   // View mode toggle
   const [conversationMode, setConversationMode] = useState(false);
@@ -97,8 +97,10 @@ export const SystemAudio = (props: useSystemAudioType) => {
   useEffect(() => {
     if (isProcessing && screenshotImage) {
       setScreenshotImage(null);
+      props.setPendingScreenshotBase64?.(null);
+      props.setPendingScreenshotAudioBase64?.(null);
     }
-  }, [isProcessing, screenshotImage]);
+  }, [isProcessing, screenshotImage, props]);
 
   const handleToggleCapture = async () => {
     if (capturing) {
@@ -129,11 +131,47 @@ export const SystemAudio = (props: useSystemAudioType) => {
           requestScreenRecordingPermission,
         } = await import("tauri-plugin-macos-permissions-api");
 
-        const hasPermission = await checkScreenRecordingPermission();
-        if (!hasPermission) {
-          await requestScreenRecordingPermission();
-          setIsCapturingScreenshot(false);
-          return;
+        // Use cached value first to avoid repeated permission dialogs
+        if (!screenRecordingPermissionGranted) {
+          const hasPermission = await checkScreenRecordingPermission();
+          if (!hasPermission) {
+            await requestScreenRecordingPermission();
+            // wait and recheck
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            const hasPermissionNow = await checkScreenRecordingPermission();
+            if (!hasPermissionNow) {
+              // Prompt the user to open System Settings
+              const openSettings = window.confirm(
+                "Screen Recording permission appears to be blocked. Open System Settings > Privacy & Security > Screen & System Audio Recording now?"
+              );
+              if (openSettings) {
+                // Open system settings to screen recording pane
+                try {
+                  const shellModule = await eval('import("@tauri-apps/api/shell")');
+                  if (shellModule?.open) {
+                    shellModule.open(
+                      "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
+                    );
+                  } else {
+                    window.open(
+                      "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
+                    );
+                  }
+                } catch (err) {
+                  window.open(
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
+                  );
+                }
+              }
+              setIsCapturingScreenshot(false);
+              setScreenRecordingPermission(false);
+              return;
+            } else {
+              setScreenRecordingPermission(true);
+            }
+          } else {
+            setScreenRecordingPermission(true);
+          }
         }
       }
 
@@ -142,7 +180,74 @@ export const SystemAudio = (props: useSystemAudioType) => {
         screenId: null, // Use default screen
       });
 
+      // Quick validation to detect blocked captures
+      try {
+        const { isLikelyInvalidScreenshot } = await import("@/lib/utils");
+        const invalid = await isLikelyInvalidScreenshot(base64);
+        if (invalid) {
+          const openSettings = window.confirm(
+            "Captured image looks invalid (possibly blocked by macOS. Open System Settings > Privacy & Security > Screen & System Audio Recording now?)"
+          );
+          if (openSettings) {
+            try {
+              const shellModule = await eval('import("@tauri-apps/api/shell")');
+              if (shellModule?.open) {
+                shellModule.open(
+                  "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
+                );
+              } else {
+                window.open(
+                  "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
+                );
+              }
+            } catch (err) {
+              window.open(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"
+              );
+            }
+          }
+          setScreenRecordingPermission(false);
+          setIsCapturingScreenshot(false);
+          return;
+        }
+      } catch (e) {
+        // ignore validation failures
+      }
+
       setScreenshotImage(base64);
+
+      // If configured, capture or attach audio and store in system audio hook to be sent with next transcription
+      try {
+        if (screenshotConfiguration?.attachAudioWithScreenshot) {
+          let audioBase64: string | undefined;
+          if (screenshotConfiguration.audioAttachMode === "record") {
+            const duration = screenshotConfiguration.audioRecordDurationSeconds || 3;
+            const result = await (props.captureShortAudio?.(duration) || Promise.resolve(null));
+            audioBase64 = result?.base64 ?? undefined;
+            if (audioBase64) props.setPendingScreenshotAudioBase64?.(audioBase64);
+            if (result?.transcription) {
+              // Also set last transcription so it can be included in the prompt
+              // Note: useSystemAudio already stores lastTranscription on normal speech-detected events
+            }
+          } else {
+            audioBase64 = props.lastAudioBase64 ?? undefined;
+            if (audioBase64) props.setPendingScreenshotAudioBase64?.(audioBase64);
+          }
+
+          if (audioBase64) {
+            // store pending screenshot and audio in hook
+            props.setPendingScreenshotBase64?.(base64 as string);
+          } else {
+            // still store screenshot even if audio failed
+            props.setPendingScreenshotBase64?.(base64 as string);
+          }
+        } else {
+          props.setPendingScreenshotBase64?.(base64 as string);
+        }
+      } catch (e) {
+        console.debug("Failed to attach audio to screenshot:", e);
+        props.setPendingScreenshotBase64?.(base64 as string);
+      }
     } catch (err) {
       console.error("Failed to capture screenshot:", err);
     } finally {
@@ -152,7 +257,9 @@ export const SystemAudio = (props: useSystemAudioType) => {
 
   const handleRemoveScreenshot = useCallback(() => {
     setScreenshotImage(null);
-  }, []);
+    props.setPendingScreenshotBase64?.(null);
+    props.setPendingScreenshotAudioBase64?.(null);
+  }, [props]);
 
   const getButtonIcon = () => {
     if (setupRequired) return <AlertCircleIcon className="text-orange-500" />;
@@ -297,6 +404,11 @@ export const SystemAudio = (props: useSystemAudioType) => {
                       <p className="text-[9px] text-muted-foreground">
                         Will be sent with next transcription
                       </p>
+                      {props.pendingScreenshotAudioBase64 && (
+                        <p className="text-[9px] text-muted-foreground mt-1">
+                          🔊 Audio will be attached with screenshot
+                        </p>
+                      )}
                     </div>
                     <Button
                       size="icon"

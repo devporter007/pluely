@@ -1,4 +1,4 @@
-import { SparklesIcon } from "lucide-react";
+
 import { Button } from "@/components";
 import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -18,12 +18,10 @@ export const Sidebar = () => {
         onClick={() => navigate("/dashboard")}
         className="flex h-16 items-center px-4 pt-10 gap-1.5"
       >
-        <div className="flex size-6 lg:size-7 items-center justify-center rounded-lg bg-primary">
-          <SparklesIcon className="size-4 lg:size-5 text-primary-foreground transition-all duration-300" />
-        </div>
+    
         <div className="flex flex-col">
           <h1 className="text-xs lg:text-md font-semibold text-foreground transition-all duration-300">
-            Pluely
+            Communist Cluely
           </h1>
           <span className="text-[8px] lg:text-[10px] text-muted-foreground -mt-1 block">
             {isLoading ? "Loading..." : `(v${version})`}
@@ -73,11 +71,9 @@ export const Sidebar = () => {
         </div>
 
         {footerItems.map((item, index) => (
-          <a
-            href={item.href}
-            onClick={item.action}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => item.action && item.action()}
             key={`${item.label}-${index}`}
             className={cn(
               "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs lg:text-sm text-sidebar-foreground/70 transition-all duration-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -87,7 +83,7 @@ export const Sidebar = () => {
               <item.icon className="size-3 lg:size-4 transition-all duration-300" />
               {item.label}
             </div>
-          </a>
+          </button>
         ))}
       </div>
     </aside>

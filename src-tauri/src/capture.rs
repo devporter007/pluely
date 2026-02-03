@@ -1,6 +1,9 @@
 use base64::Engine;
+use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::PngEncoder;
-use image::{ColorType, GenericImageView, ImageEncoder};
+use image::{ColorType, GenericImageView, DynamicImage};
+use image::imageops::FilterType;
+use image::ImageEncoder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -201,6 +204,9 @@ pub async fn capture_selected_area(
     app: tauri::AppHandle,
     coords: SelectionCoords,
     monitor_index: usize,
+    compression_enabled: Option<bool>,
+    compression_max_dimension: Option<u32>,
+    compression_quality: Option<u8>,
 ) -> Result<String, String> {
     // Get the stored captured monitors
     let state = app.state::<CaptureState>();
@@ -228,18 +234,46 @@ pub async fn capture_selected_area(
     // Crop the image to the selected area
     let cropped = monitor_info.image.view(x, y, width, height).to_image();
 
-    // Encode to PNG and base64
-    let mut png_buffer = Vec::new();
-    PngEncoder::new(&mut png_buffer)
-        .write_image(
-            cropped.as_raw(),
-            cropped.width(),
-            cropped.height(),
-            ColorType::Rgba8.into(),
-        )
-        .map_err(|e| format!("Failed to encode to PNG: {}", e))?;
+    // Compression settings (from frontend)
+    let use_compression = compression_enabled.unwrap_or(true);
+    let max_dim = compression_max_dimension.unwrap_or(1600);
+    let jpeg_quality = compression_quality.unwrap_or(75);
 
-    let base64_str = base64::engine::general_purpose::STANDARD.encode(png_buffer);
+    let base64_str = if use_compression {
+        let dyn_img = DynamicImage::ImageRgba8(cropped);
+        let (w, h) = dyn_img.dimensions();
+        let (new_w, new_h) = if w.max(h) > max_dim {
+            let scale = (max_dim as f64 / w.max(h) as f64) as f32;
+            let nw = (w as f32 * scale).round() as u32;
+            let nh = (h as f32 * scale).round() as u32;
+            (nw, nh)
+        } else {
+            (w, h)
+        };
+
+        let resized = if (new_w, new_h) != (w, h) {
+            let buf = image::imageops::resize(&dyn_img, new_w, new_h, FilterType::Triangle);
+            DynamicImage::ImageRgba8(buf)
+        } else {
+            dyn_img.clone()
+        };
+
+        // Convert to RGB (drops alpha) and encode as JPEG
+        let rgb = resized.to_rgb8();
+        let mut out_buf = Vec::new();
+        JpegEncoder::new_with_quality(&mut out_buf, jpeg_quality)
+            .encode(&rgb.as_raw(), rgb.width(), rgb.height(), ColorType::Rgb8.into())
+            .map_err(|e| format!("Failed to encode to JPEG: {}", e))?;
+
+        base64::engine::general_purpose::STANDARD.encode(out_buf)
+    } else {
+        // Return a PNG if compression is disabled (preserves alpha)
+        let mut out_buf = Vec::new();
+        PngEncoder::new(&mut out_buf)
+            .write_image(&cropped.as_raw(), cropped.width(), cropped.height(), ColorType::Rgba8.into())
+            .map_err(|e| format!("Failed to encode to PNG: {}", e))?;
+        base64::engine::general_purpose::STANDARD.encode(out_buf)
+    };
 
     captured_monitors.clear();
     drop(captured_monitors);
@@ -262,7 +296,7 @@ pub async fn capture_selected_area(
 }
 
 #[tauri::command]
-pub async fn capture_to_base64(window: tauri::WebviewWindow) -> Result<String, String> {
+pub async fn capture_to_base64(window: tauri::WebviewWindow, compression_enabled: Option<bool>, compression_max_dimension: Option<u32>, compression_quality: Option<u8>) -> Result<String, String> {
     let monitor_fallback = window
         .current_monitor()
         .ok()
@@ -373,16 +407,47 @@ pub async fn capture_to_base64(window: tauri::WebviewWindow) -> Result<String, S
         let image = monitor
             .capture_image()
             .map_err(|e| format!("Failed to capture image: {}", e))?;
-        let mut png_buffer = Vec::new();
-        PngEncoder::new(&mut png_buffer)
-            .write_image(
-                image.as_raw(),
-                image.width(),
-                image.height(),
-                ColorType::Rgba8.into(),
-            )
-            .map_err(|e| format!("Failed to encode to PNG: {}", e))?;
-        let base64_str = base64::engine::general_purpose::STANDARD.encode(png_buffer);
+
+        // Compression settings (from frontend)
+        let use_compression = compression_enabled.unwrap_or(true);
+        let max_dim = compression_max_dimension.unwrap_or(1600);
+        let jpeg_quality = compression_quality.unwrap_or(75);
+
+        let base64_str = if use_compression {
+            let dyn_img = DynamicImage::ImageRgba8(image);
+            let (w, h) = dyn_img.dimensions();
+            let (new_w, new_h) = if w.max(h) > max_dim {
+                let scale = (max_dim as f64 / w.max(h) as f64) as f32;
+                let nw = (w as f32 * scale).round() as u32;
+                let nh = (h as f32 * scale).round() as u32;
+                (nw, nh)
+            } else {
+                (w, h)
+            };
+
+            let resized = if (new_w, new_h) != (w, h) {
+                let buf = image::imageops::resize(&dyn_img, new_w, new_h, FilterType::Triangle);
+                DynamicImage::ImageRgba8(buf)
+            } else {
+                dyn_img.clone()
+            };
+
+            // Convert to RGB and encode as JPEG
+            let rgb = resized.to_rgb8();
+            let mut out_buf = Vec::new();
+            JpegEncoder::new_with_quality(&mut out_buf, jpeg_quality)
+                .encode(&rgb.as_raw(), rgb.width(), rgb.height(), ColorType::Rgb8.into())
+                .map_err(|e| format!("Failed to encode to JPEG: {}", e))?;
+            base64::engine::general_purpose::STANDARD.encode(out_buf)
+        } else {
+            // No compression requested; return PNG to preserve alpha
+            let mut out_buf = Vec::new();
+            PngEncoder::new(&mut out_buf)
+                .write_image(&image.as_raw(), image.width(), image.height(), ColorType::Rgba8.into())
+                .map_err(|e| format!("Failed to encode to PNG: {}", e))?;
+            base64::engine::general_purpose::STANDARD.encode(out_buf)
+        };
+
 
         Ok(base64_str)
     })

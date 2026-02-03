@@ -69,10 +69,13 @@ export function useSystemAudio() {
   const { resizeWindow } = useWindowResize();
   const globalShortcuts = useGlobalShortcuts();
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [pendingScreenshotBase64, setPendingScreenshotBase64] = useState<string | null>(null);
+  const [pendingScreenshotAudioBase64, setPendingScreenshotAudioBase64] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
   const [lastTranscription, setLastTranscription] = useState<string>("");
+  const [lastAudioBase64, setLastAudioBase64] = useState<string | null>(null);
   const [lastAIResponse, setLastAIResponse] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [setupRequired, setSetupRequired] = useState<boolean>(false);
@@ -105,11 +108,20 @@ export function useSystemAudio() {
     allAiProviders,
     systemPrompt,
     selectedAudioDevices,
+    screenshotConfiguration,
   } = useApp();
   const abortControllerRef = useRef<AbortController | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSavingRef = useRef<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const [, setIsScreenshotLoading] = useState(false);
+  const screenshotConfigRef = useRef(screenshotConfiguration);
+  const hasCheckedPermissionRef = useRef(false);
+
+  useEffect(() => {
+    screenshotConfigRef.current = screenshotConfiguration;
+  }, [screenshotConfiguration]);
 
   // Load context settings and VAD config from localStorage on mount
   useEffect(() => {
@@ -234,6 +246,9 @@ export function useSystemAudio() {
               bytes[i] = binaryString.charCodeAt(i);
             }
             const audioBlob = new Blob([bytes], { type: "audio/wav" });
+
+            // Cache the raw audio base64 for later use (attach with screenshot if needed)
+            setLastAudioBase64(base64Audio);
 
             const usePluelyAPI = await shouldUsePluelyAPI();
             if (!selectedSttProvider.provider && !usePluelyAPI) {
@@ -467,6 +482,126 @@ export function useSystemAudio() {
     }
   }, [isContinuousMode, isRecordingInContinuousMode]);
 
+  // Capture a short audio clip (used for attaching to screenshots)
+  const captureShortAudio = useCallback(
+    async (durationSeconds: number): Promise<{ base64?: string; transcription?: string | null } | null> => {
+      try {
+        setIsProcessing(true);
+        setError("");
+
+        // One-time listeners for speech-detected / audio-encoding-error
+        let resolved = false;
+
+        const speechPromise: Promise<{ base64?: string; transcription?: string | null } | null> = new Promise(async (resolve) => {
+          let unlistenSpeech: (() => void) | undefined;
+          let unlistenError: (() => void) | undefined;
+          let unlistenStopped: (() => void) | undefined;
+
+          try {
+            unlistenSpeech = await listen("speech-detected", async (event) => {
+              if (resolved) return;
+              resolved = true;
+              const base64Audio = event.payload as string;
+              setLastAudioBase64(base64Audio);
+
+              // Convert to blob
+              const binaryString = atob(base64Audio);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const audioBlob = new Blob([bytes], { type: "audio/wav" });
+
+              // Try to transcribe if provider is available
+              let transcription: string | null = null;
+              try {
+                const usePluelyAPI = await shouldUsePluelyAPI();
+                const providerConfig = allSttProviders.find(
+                  (p) => p.id === selectedSttProvider.provider
+                );
+                if (providerConfig || usePluelyAPI) {
+                  transcription = await fetchSTT({
+                    provider: providerConfig,
+                    selectedProvider: selectedSttProvider,
+                    audio: audioBlob,
+                  });
+                }
+              } catch (sttErr) {
+                console.debug("Failed to transcribe short audio:", sttErr);
+              }
+
+              // cleanup
+              if (unlistenSpeech) unlistenSpeech();
+              if (unlistenError) unlistenError();
+              if (unlistenStopped) unlistenStopped();
+
+              resolve({ base64: base64Audio, transcription });
+            });
+
+            unlistenError = await listen("audio-encoding-error", (_event) => {
+              if (resolved) return;
+              resolved = true;
+              if (unlistenSpeech) unlistenSpeech();
+              if (unlistenError) unlistenError();
+              if (unlistenStopped) unlistenStopped();
+              resolve(null);
+            });
+
+            unlistenStopped = await listen("continuous-recording-stopped", () => {
+              if (resolved) return;
+              resolved = true;
+              if (unlistenSpeech) unlistenSpeech();
+              if (unlistenError) unlistenError();
+              if (unlistenStopped) unlistenStopped();
+              resolve(null);
+            });
+
+            // Start capture with VAD disabled and short max duration
+            const deviceId =
+              selectedAudioDevices.output.id !== "default"
+                ? selectedAudioDevices.output.id
+                : null;
+
+            const newVadConfig = { ...vadConfig, enabled: false, max_recording_duration_secs: Math.max(1, Math.min(30, Math.round(durationSeconds))) };
+
+            await invoke<string>("start_system_audio_capture", {
+              vadConfig: newVadConfig,
+              deviceId: deviceId,
+            });
+
+            // Stop after durationSeconds (manual stop triggers emission)
+            setTimeout(() => {
+              // Attempt to gracefully stop continuous capture
+              try {
+                invoke("manual_stop_continuous").catch(() => {});
+              } catch (e) {
+                // ignore
+              }
+            }, Math.max(100, Math.round(durationSeconds * 1000)) + 250);
+          } catch (err) {
+            console.error("Failed to capture short audio:", err);
+            if (!resolved) {
+              resolved = true;
+              if (unlistenSpeech) unlistenSpeech();
+              if (unlistenError) unlistenError();
+              if (unlistenStopped) unlistenStopped();
+              resolve(null);
+            }
+          }
+        });
+
+        const result = await speechPromise;
+        setIsProcessing(false);
+        return result;
+      } catch (err) {
+        console.error("captureShortAudio failed:", err);
+        setIsProcessing(false);
+        return null;
+      }
+    },
+    [allSttProviders, selectedSttProvider, selectedAudioDevices.output.id, vadConfig]
+  );
+
   // AI Processing function
   const processWithAI = useCallback(
     async (
@@ -502,17 +637,105 @@ export function useSystemAudio() {
         }
 
         try {
+          // Prepare image list (auto-capture if configured) and include any pending screenshot captured via UI
+          const imagesBase64: string[] = [];
+          const configForCapture = screenshotConfigRef.current;
+
+          // Include pending screenshot captured via UI (e.g., Screenshot button)
+          if (pendingScreenshotBase64) {
+            imagesBase64.push(pendingScreenshotBase64);
+          }
+
+          if (configForCapture?.enabled && configForCapture?.attachOnEveryRequest) {
+            setIsScreenshotLoading(true);
+            try {
+              const platform = navigator.platform.toLowerCase();
+              if (platform.includes("mac") && !hasCheckedPermissionRef.current) {
+                const {
+                  checkScreenRecordingPermission,
+                  requestScreenRecordingPermission,
+                } = await import("tauri-plugin-macos-permissions-api");
+
+                const hasPermission = await checkScreenRecordingPermission();
+                if (!hasPermission) {
+                  await requestScreenRecordingPermission();
+                  await new Promise((resolve) => setTimeout(resolve, 2000));
+                  const hasPermissionNow = await checkScreenRecordingPermission();
+                  if (!hasPermissionNow) {
+                    setError(
+                      "Screen Recording permission required. Please enable it by going to System Settings > Privacy & Security > Screen & System Audio Recording. Then restart the app."
+                    );
+                  }
+                }
+                hasCheckedPermissionRef.current = true;
+              }
+
+              const configForCapture = screenshotConfigRef.current;
+              const captured = await invoke("capture_to_base64", {
+                compressionEnabled: configForCapture.compressionEnabled ?? true,
+                compressionQuality: configForCapture.compressionQuality ?? 75,
+                compressionMaxDimension: configForCapture.compressionMaxDimension ?? 1600,
+              });
+              if (captured) imagesBase64.push(captured as string);
+            } catch (err) {
+              console.error("Failed to auto-capture screenshot:", err);
+            } finally {
+              setIsScreenshotLoading(false);
+            }
+          }
+
+          // If we have a pending audio attachment for screenshot, attempt to transcribe it and append to the user message
+          let audioBase64ForRequest: string | undefined = undefined;
+          if (pendingScreenshotAudioBase64) {
+            audioBase64ForRequest = pendingScreenshotAudioBase64;
+            try {
+              const binaryString = atob(pendingScreenshotAudioBase64);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const audioBlob = new Blob([bytes], { type: "audio/wav" });
+
+              const usePluelyAPIForStt = await shouldUsePluelyAPI();
+              const providerConfig = allSttProviders.find(
+                (p) => p.id === selectedSttProvider.provider
+              );
+
+              if (providerConfig || usePluelyAPIForStt) {
+                try {
+                  const sttResult = await fetchSTT({
+                    provider: providerConfig,
+                    selectedProvider: selectedSttProvider,
+                    audio: audioBlob,
+                  });
+                  if (sttResult && sttResult.trim()) {
+                    transcription = `${transcription}\n\n[Attached audio transcription]: ${sttResult}`;
+                  }
+                } catch (sttErr) {
+                  console.debug("Failed to transcribe attached audio:", sttErr);
+                }
+              }
+            } catch (err) {
+              console.debug("Failed to prepare attached audio for request:", err);
+            }
+          }
+
           for await (const chunk of fetchAIResponse({
             provider: usePluelyAPI ? undefined : provider,
             selectedProvider: selectedAIProvider,
             systemPrompt: prompt,
             history: previousMessages,
             userMessage: transcription,
-            imagesBase64: [],
+            imagesBase64,
+            audioBase64: audioBase64ForRequest,
           })) {
             fullResponse += chunk;
             setLastAIResponse((prev) => prev + chunk);
           }
+
+          // Clear pending screenshot/audio after use
+          setPendingScreenshotBase64(null);
+          setPendingScreenshotAudioBase64(null);
         } catch (aiError: any) {
           setError(aiError.message || "Failed to get AI response");
         }
@@ -919,6 +1142,14 @@ export function useSystemAudio() {
     isContinuousMode,
     isRecordingInContinuousMode,
     recordingProgress,
+    // Short audio capture for screenshots
+    lastAudioBase64,
+    captureShortAudio,
+    // Pending screenshot/audio setters
+    pendingScreenshotBase64,
+    setPendingScreenshotBase64,
+    pendingScreenshotAudioBase64,
+    setPendingScreenshotAudioBase64,
     manualStopAndSend,
     startContinuousRecording,
     ignoreContinuousRecording,

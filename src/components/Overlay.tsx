@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MousePointer2 } from "lucide-react";
+import { useApp } from "@/contexts";
 
 interface SelectionCoords {
   x: number;
@@ -39,6 +40,8 @@ const Overlay: React.FC<OverlayProps> = ({ monitorIndex }) => {
   };
 
   // Handle selection completion
+  const { screenshotConfiguration } = useApp();
+
   const handleSelectionComplete = async (
     x: number,
     y: number,
@@ -54,9 +57,16 @@ const Overlay: React.FC<OverlayProps> = ({ monitorIndex }) => {
         height: Math.round(height * scaleFactor),
       };
 
+      const compressionEnabled = screenshotConfiguration?.compressionEnabled ?? true;
+      const compressionQuality = screenshotConfiguration?.compressionQuality ?? 75;
+      const compressionMaxDimension = screenshotConfiguration?.compressionMaxDimension ?? 1600;
+
       await invoke("capture_selected_area", {
         coords,
         monitorIndex,
+        compressionEnabled,
+        compressionQuality,
+        compressionMaxDimension,
       });
     } catch {
       // Error ignored

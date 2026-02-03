@@ -44,6 +44,21 @@ export interface ScreenshotConfig {
   mode: ScreenshotMode;
   autoPrompt: string;
   enabled: boolean;
+  // When true, capture a full-screen screenshot and attach it to every AI request
+  attachOnEveryRequest?: boolean;
+  // When true, also attach a short system audio recording when a screenshot is taken
+  attachAudioWithScreenshot?: boolean;
+  // Mode for audio attachment: 'last' = use most recent stt snippet, 'record' = record a short clip at screenshot time
+  audioAttachMode?: "last" | "record";
+  // If audioAttachMode is 'record', duration (in seconds) to record for the clip
+  audioRecordDurationSeconds?: number;
+
+  // Compression settings: when enabled, screenshots will be resized and encoded as JPEG
+  compressionEnabled?: boolean;
+  // JPEG quality (1-100)
+  compressionQuality?: number;
+  // Maximum dimension (px) for the longest side before resizing
+  compressionMaxDimension?: number;
 }
 
 // Speech-to-Text provider types

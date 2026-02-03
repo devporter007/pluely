@@ -48,6 +48,7 @@ async function* fetchPluelyAIResponse(params: {
   systemPrompt?: string;
   userMessage: string;
   imagesBase64?: string[];
+  audioBase64?: string;
   history?: Message[];
   signal?: AbortSignal;
 }): AsyncIterable<string> {
@@ -56,6 +57,7 @@ async function* fetchPluelyAIResponse(params: {
       systemPrompt,
       userMessage,
       imagesBase64 = [],
+      audioBase64,
       history = [],
       signal,
     } = params;
@@ -108,6 +110,7 @@ async function* fetchPluelyAIResponse(params: {
         userMessage,
         systemPrompt,
         imageBase64,
+        audioBase64: audioBase64,
         history: historyString,
       });
 
@@ -171,6 +174,7 @@ export async function* fetchAIResponse(params: {
   history?: Message[];
   userMessage: string;
   imagesBase64?: string[];
+  audioBase64?: string;
   signal?: AbortSignal;
 }): AsyncIterable<string> {
   try {
@@ -181,6 +185,7 @@ export async function* fetchAIResponse(params: {
       history = [],
       userMessage,
       imagesBase64 = [],
+      audioBase64,
       signal,
     } = params;
 
@@ -245,6 +250,12 @@ export async function* fetchAIResponse(params: {
       );
     }
 
+    if (audioBase64 && !provider.curl.includes("{{AUDIO}}")) {
+      throw new Error(
+        `Provider ${provider?.id ?? "unknown"} does not support audio input`
+      );
+    }
+
     let bodyObj: any = curlJson.data
       ? JSON.parse(JSON.stringify(curlJson.data))
       : {};
@@ -262,7 +273,7 @@ export async function* fetchAIResponse(params: {
       bodyObj[messagesKey] = finalMessages;
     }
 
-    const allVariables = {
+    const allVariables: Record<string, any> = {
       ...Object.fromEntries(
         Object.entries(selectedProvider.variables).map(([key, value]) => [
           key.toUpperCase(),
@@ -271,6 +282,11 @@ export async function* fetchAIResponse(params: {
       ),
       SYSTEM_PROMPT: enhancedSystemPrompt || "",
     };
+
+    // Inject AUDIO variable if present
+    if (audioBase64) {
+      allVariables["AUDIO"] = audioBase64;
+    }
 
     bodyObj = deepVariableReplacer(bodyObj, allVariables);
     let url = deepVariableReplacer(curlJson.url || "", allVariables);

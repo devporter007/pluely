@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { GetLicense } from "@/components";
-import { PluelyApiSetup, Usage } from "./components";
 import { PageLayout } from "@/layouts";
 import { useApp } from "@/contexts";
 
@@ -49,20 +48,29 @@ const Dashboard = () => {
   return (
     <PageLayout
       title="Dashboard"
-      description="Pluely license to unlock faster responses, quicker support and premium features."
+      description=""
       rightSlot={!hasActiveLicense ? <GetLicense /> : null}
     >
-      {/* Pluely API Setup */}
-      <PluelyApiSetup />
-
-      <Usage
-        loading={loadingActivity}
-        onRefresh={fetchActivity}
-        data={activityData}
-        totalTokens={totalTokens}
-      />
+      <div className="space-y-4">
+        <h2 className="text-sm text-muted-foreground">Overview</h2>
+        {loadingActivity ? (
+          <div className="p-4 rounded-lg border bg-card">Loading activity...</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-lg border bg-card">
+              <p className="text-xs text-muted-foreground">Total tokens used this month</p>
+              <div className="text-lg font-semibold">{totalTokens}</div>
+            </div>
+            <div className="p-4 rounded-lg border bg-card">
+              <p className="text-xs text-muted-foreground">Recent activity</p>
+              <div className="text-lg font-semibold">{activityData.length}</div>
+            </div>
+          </div>
+        )}
+      </div>
     </PageLayout>
   );
+
 };
 
 export default Dashboard;

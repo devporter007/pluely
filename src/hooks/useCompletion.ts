@@ -59,7 +59,13 @@ export const useCompletion = () => {
     systemPrompt,
     screenshotConfiguration,
     setScreenshotConfiguration,
+    screenRecordingPermissionGranted,
+    setScreenRecordingPermission,
   } = useApp();
+
+  // Mark these as used to avoid TS6133 when some flows don't reference them directly
+  void screenRecordingPermissionGranted;
+  void setScreenRecordingPermission;
   const globalShortcuts = useGlobalShortcuts();
 
   const [state, setState] = useState<CompletionState>({
@@ -160,6 +166,9 @@ export const useCompletion = () => {
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
 
+      // Storage for any screenshot we capture during this submission
+      let capturedScreenshotBase64: string | null = null;
+
       try {
         // Prepare message history for the AI
         const messageHistory = state.conversationHistory.map((msg) => ({
@@ -175,6 +184,11 @@ export const useCompletion = () => {
               imagesBase64.push(file.base64);
             }
           });
+        }
+
+        // If we captured a screenshot earlier in this flow, include it as well
+        if (typeof capturedScreenshotBase64 === "string" && capturedScreenshotBase64) {
+          imagesBase64.push(capturedScreenshotBase64);
         }
 
         let fullResponse = "";
@@ -209,6 +223,77 @@ export const useCompletion = () => {
         }));
 
         try {
+          // If configured, capture a full-screen screenshot and attach it so it is sent along like other attachments
+          const configForCapture = screenshotConfigRef.current;
+          let capturedScreenshotBase64: string | null = null;
+          if (
+            configForCapture?.enabled &&
+            configForCapture?.attachOnEveryRequest &&
+            state.attachedFiles.length === 0
+          ) {
+            setIsScreenshotLoading(true);
+            try {
+              const platform = navigator.platform.toLowerCase();
+              if (platform.includes("mac") && !hasCheckedPermissionRef.current) {
+                const {
+                  checkScreenRecordingPermission,
+                  requestScreenRecordingPermission,
+                } = await import("tauri-plugin-macos-permissions-api");
+
+                const hasPermission = await checkScreenRecordingPermission();
+                if (!hasPermission) {
+                  await requestScreenRecordingPermission();
+                  await new Promise((resolve) => setTimeout(resolve, 2000));
+                  const hasPermissionNow = await checkScreenRecordingPermission();
+                  if (!hasPermissionNow) {
+                    setState((prev) => ({
+                      ...prev,
+                      error:
+                        "Screen Recording permission required. Please enable it by going to System Settings > Privacy & Security > Screen & System Audio Recording. Then restart the app.",
+                    }));
+                  }
+                }
+                hasCheckedPermissionRef.current = true;
+              }
+
+              const configForCapture = screenshotConfigRef.current;
+              const captured = await invoke("capture_to_base64", {
+                compressionEnabled: configForCapture.compressionEnabled ?? true,
+                compressionQuality: configForCapture.compressionQuality ?? 75,
+                compressionMaxDimension: configForCapture.compressionMaxDimension ?? 1600,
+              });
+              if (captured) {
+                // Only attach if there is room
+                if (state.attachedFiles.length < MAX_FILES) {
+                  capturedScreenshotBase64 = captured as string;
+
+                  const attachedFile: AttachedFile = {
+                    id: Date.now().toString(),
+                    name: `screenshot_${Date.now()}.png`,
+                    type: "image/png",
+                    base64: capturedScreenshotBase64,
+                    size: capturedScreenshotBase64.length,
+                  };
+
+                  setState((prev) => ({
+                    ...prev,
+                    attachedFiles: [...prev.attachedFiles, attachedFile],
+                    input: configForCapture.mode === "auto" ? configForCapture.autoPrompt : prev.input,
+                  }));
+                } else {
+                  setState((prev) => ({
+                    ...prev,
+                    error: `Max ${MAX_FILES} files attached. Screenshot not attached.`,
+                  }));
+                }
+              }
+            } catch (err) {
+              console.error("Failed to auto-capture screenshot:", err);
+            } finally {
+              setIsScreenshotLoading(false);
+            }
+          }
+
           // Use the fetchAIResponse function with signal
           for await (const chunk of fetchAIResponse({
             provider: usePluelyAPI ? undefined : provider,
@@ -541,7 +626,7 @@ export const useCompletion = () => {
   };
 
   const handleScreenshotSubmit = useCallback(
-    async (base64: string, prompt?: string) => {
+    async (base64: string, prompt?: string, audioBase64?: string | undefined, audioTranscription?: string | null) => {
       if (state.attachedFiles.length >= MAX_FILES) {
         setState((prev) => ({
           ...prev,
@@ -551,8 +636,20 @@ export const useCompletion = () => {
       }
 
       try {
+        // Prepare optional audio attachment ahead of branching so both auto and manual flows can include it
+        let audioAttachedFile: AttachedFile | undefined = undefined;
+        if (audioBase64 && state.attachedFiles.length < MAX_FILES) {
+          audioAttachedFile = {
+            id: Date.now().toString() + "_audio",
+            name: `screenshot_audio_${Date.now()}.wav`,
+            type: "audio/wav",
+            base64: audioBase64,
+            size: audioBase64.length,
+          };
+        }
+
         if (prompt) {
-          // Auto mode: Submit directly to AI with screenshot
+          // Auto mode: Submit directly to AI with screenshot (and optional audio attachment)
           const attachedFile: AttachedFile = {
             id: Date.now().toString(),
             name: `screenshot_${Date.now()}.png`,
@@ -612,15 +709,21 @@ export const useCompletion = () => {
               response: "",
             }));
 
+            // If we have audio transcription from the attached audio, append it to the prompt
+            let promptForRequest = prompt;
+            if (audioTranscription && audioTranscription.trim()) {
+              promptForRequest = `${prompt}\n\n[Attached audio transcription]: ${audioTranscription}`;
+            }
+
             // Use the fetchAIResponse function with image and signal
             for await (const chunk of fetchAIResponse({
               provider: usePluelyAPI ? undefined : provider,
               selectedProvider: selectedAIProvider,
               systemPrompt: systemPrompt || undefined,
               history: messageHistory,
-              userMessage: prompt,
+              userMessage: promptForRequest,
               imagesBase64: [base64],
-              signal,
+              audioBase64: audioBase64,
             })) {
               // Only update if this is still the current request
               if (currentRequestIdRef.current !== requestId || signal.aborted) {
@@ -648,9 +751,8 @@ export const useCompletion = () => {
 
             // Save the conversation after successful completion
             if (fullResponse) {
-              await saveCurrentConversation(prompt, fullResponse, [
-                attachedFile,
-              ]);
+              const filesToSave = audioAttachedFile ? [attachedFile, audioAttachedFile] : [attachedFile];
+              await saveCurrentConversation(prompt, fullResponse, filesToSave);
               // Clear input after saving
               setState((prev) => ({
                 ...prev,
@@ -683,7 +785,9 @@ export const useCompletion = () => {
 
           setState((prev) => ({
             ...prev,
-            attachedFiles: [...prev.attachedFiles, attachedFile],
+            attachedFiles: audioAttachedFile
+              ? [...prev.attachedFiles, attachedFile, audioAttachedFile]
+              : [...prev.attachedFiles, attachedFile],
           }));
         }
       } catch (error) {
@@ -887,7 +991,11 @@ export const useCompletion = () => {
       }
 
       if (config.enabled) {
-        const base64 = await invoke("capture_to_base64");
+        const base64 = await invoke("capture_to_base64", {
+          compressionEnabled: config.compressionEnabled ?? true,
+          compressionQuality: config.compressionQuality ?? 75,
+          compressionMaxDimension: config.compressionMaxDimension ?? 1600,
+        });
 
         if (config.mode === "auto") {
           // Auto mode: Submit directly to AI with the configured prompt

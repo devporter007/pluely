@@ -35,6 +35,9 @@ export type IContextType = {
   setScreenshotConfiguration: React.Dispatch<
     React.SetStateAction<ScreenshotConfig>
   >;
+  // Whether macOS Screen Recording permission has been granted
+  screenRecordingPermissionGranted: boolean;
+  setScreenRecordingPermission: (granted: boolean) => void;
   customizable: CustomizableState;
   toggleAppIconVisibility: (isVisible: boolean) => Promise<void>;
   toggleAlwaysOnTop: (isEnabled: boolean) => Promise<void>;

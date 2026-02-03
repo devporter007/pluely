@@ -46,3 +46,49 @@ export const floatArrayToWav = (
 
   return new Blob([buffer], { type: `audio/${format}` });
 };
+
+// Check whether a captured screenshot image is likely invalid (blocked by permissions).
+// This draws the image to a small canvas and computes pixel variance; very low variance
+// usually indicates a blocked/blank/placeholder capture (or a completely solid-color image).
+export const isLikelyInvalidScreenshot = async (base64Png: string) => {
+  return new Promise<boolean>((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const size = 64; // downscale for fast processing
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(false);
+          ctx.drawImage(img, 0, 0, size, size);
+          const data = ctx.getImageData(0, 0, size, size).data;
+          let sum = 0;
+          let sumSq = 0;
+          const n = size * size;
+          for (let i = 0; i < data.length; i += 4) {
+            // use luminance approximation
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            sum += lum;
+            sumSq += lum * lum;
+          }
+          const mean = sum / n;
+          const variance = sumSq / n - mean * mean;
+          // If variance is very small, the image is likely blank/placeholder
+          const threshold = 50; // tuned empirically
+          resolve(variance < threshold);
+        } catch (e) {
+          resolve(false);
+        }
+      };
+      img.onerror = () => resolve(false);
+      img.src = `data:image/png;base64,${base64Png}`;
+    } catch (e) {
+      resolve(false);
+    }
+  });
+};

@@ -6,6 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
   Header,
+  Switch,
 } from "@/components";
 import { UseSettingsReturn } from "@/types";
 import { LaptopMinimalIcon, MousePointer2Icon } from "lucide-react";
@@ -15,6 +16,13 @@ export const ScreenshotConfigs = ({
   handleScreenshotModeChange,
   handleScreenshotPromptChange,
   handleScreenshotEnabledChange,
+  handleScreenshotAttachChange,
+  handleAttachAudioWithScreenshotChange,
+  handleScreenshotAudioModeChange,
+  handleScreenshotAudioDurationChange,
+  handleScreenshotCompressionEnabledChange,
+  handleScreenshotCompressionQualityChange,
+  handleScreenshotCompressionMaxDimChange,
   hasActiveLicense,
 }: UseSettingsReturn) => {
   return (
@@ -121,6 +129,159 @@ export const ScreenshotConfigs = ({
               This prompt will be used automatically when screenshots are taken
             </p>
           </div>
+        )}
+
+        {/* Attach on every request toggle - visible when screenshot mode is enabled */}
+        {screenshotConfiguration.enabled && (
+          <>
+            <div className="flex justify-between items-center space-x-2 pt-3">
+              <div className="flex-1">
+                <Header
+                  title="Attach to every request"
+                  description="Automatically capture and attach a full-screen screenshot to every AI request when enabled."
+                />
+              </div>
+              <div className="flex items-center">
+                <Switch
+                  checked={!!screenshotConfiguration.attachOnEveryRequest}
+                  onCheckedChange={(checked) =>
+                    handleScreenshotAttachChange(checked)
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Audio attachment options for screenshots */}
+            {screenshotConfiguration.attachOnEveryRequest && (
+              <div className="space-y-2 mt-3">
+                <div className="flex justify-between items-center space-x-2">
+                  <div className="flex-1">
+                    <Header
+                      title="Attach system audio"
+                      description="Also attach a short system audio clip (and its transcription) with screenshots."
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <Switch
+                      checked={!!screenshotConfiguration.attachAudioWithScreenshot}
+                      onCheckedChange={(checked) =>
+                        handleAttachAudioWithScreenshotChange(checked)
+                      }
+                    />
+                  </div>
+                </div>
+
+                {screenshotConfiguration.attachAudioWithScreenshot && (
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Audio Mode</Label>
+                      <Select
+                        value={screenshotConfiguration.audioAttachMode || "last"}
+                        onValueChange={(value) =>
+                          handleScreenshotAudioModeChange(value as "last" | "record")
+                        }
+                      >
+                        <SelectTrigger className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium">
+                              {screenshotConfiguration.audioAttachMode === "record"
+                                ? "Record now"
+                                : "Use last transcription"}
+                            </div>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="last">
+                            <div className="font-medium">Use last transcription</div>
+                          </SelectItem>
+                          <SelectItem value="record">
+                            <div className="font-medium">Record a short clip now</div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {screenshotConfiguration.audioAttachMode === "record" && (
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">Record Duration (seconds)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={screenshotConfiguration.audioRecordDurationSeconds || 3}
+                          onChange={(e) =>
+                            handleScreenshotAudioDurationChange(Number(e.target.value))
+                          }
+                          className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Length of the short audio clip recorded when you take a screenshot.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Compression settings */}
+                <div className="flex justify-between items-center space-x-2 pt-3">
+                  <div className="flex-1">
+                    <Header
+                      title="Compress screenshots"
+                      description="Reduce image size by resizing and encoding screenshots as JPEG. This speeds up uploads while keeping text legible."
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <Switch
+                      checked={!!screenshotConfiguration.compressionEnabled}
+                      onCheckedChange={(checked) =>
+                        // handler from props
+                        handleScreenshotCompressionEnabledChange(checked as boolean)
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Compression options */}
+                {screenshotConfiguration.compressionEnabled && (
+                  <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">JPEG Quality (1-100)</Label>
+                      <Input
+                        type="number"
+                        min={20}
+                        max={100}
+                        value={screenshotConfiguration.compressionQuality ?? 75}
+                        onChange={(e) =>
+                          handleScreenshotCompressionQualityChange(Number(e.target.value))
+                        }
+                        className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Lower values produce smaller images but reduce clarity.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Max Dimension (px)</Label>
+                      <Input
+                        type="number"
+                        min={400}
+                        max={5000}
+                        value={screenshotConfiguration.compressionMaxDimension ?? 1600}
+                        onChange={(e) =>
+                          handleScreenshotCompressionMaxDimChange(Number(e.target.value))
+                        }
+                        className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Maximum length of the longest side before resizing.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 

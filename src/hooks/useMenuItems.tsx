@@ -1,6 +1,5 @@
 import {
   Settings,
-  Code,
   MessagesSquare,
   WandSparkles,
   AudioLinesIcon,
@@ -8,15 +7,10 @@ import {
   MonitorIcon,
   HomeIcon,
   PowerIcon,
-  MailIcon,
-  CoffeeIcon,
-  GlobeIcon,
-  BugIcon,
   MessageSquareTextIcon,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useApp } from "@/contexts";
-import { XIcon, GithubIcon } from "@/components";
 
 export const useMenuItems = () => {
   const { hasActiveLicense } = useApp();
@@ -30,7 +24,7 @@ export const useMenuItems = () => {
     {
       icon: HomeIcon,
       label: "Dashboard",
-      href: "/dashboard",
+      href: "/dev-space",
     },
     {
       icon: MessagesSquare,
@@ -68,28 +62,15 @@ export const useMenuItems = () => {
       href: "/shortcuts",
     },
 
-    {
-      icon: Code,
-      label: "Dev space",
-      href: "/dev-space",
-    },
   ];
 
   const footerItems = [
     ...(hasActiveLicense
       ? [
-          {
-            icon: MailIcon,
-            label: "Contact Support",
-            href: "mailto:support@pluely.com",
-          },
+
         ]
       : []),
-    {
-      icon: BugIcon,
-      label: "Report a bug",
-      href: "https://github.com/iamsrikanthnani/pluely/issues/new?template=bug-report.yml",
-    },
+
     {
       icon: PowerIcon,
       label: "Quit pluely",
@@ -104,26 +85,7 @@ export const useMenuItems = () => {
     icon: React.ElementType;
     link: string;
   }[] = [
-    {
-      title: "Website",
-      icon: GlobeIcon,
-      link: "https://pluely.com",
-    },
-    {
-      title: "Github",
-      icon: GithubIcon,
-      link: "https://github.com/iamsrikanthnani/pluely",
-    },
-    {
-      title: "Buy Me a Coffee",
-      icon: CoffeeIcon,
-      link: "https://buymeacoffee.com/srikanthnani",
-    },
-    {
-      title: "Follow on X",
-      icon: XIcon,
-      link: "https://x.com/srikanthnani",
-    },
+
   ];
 
   return {

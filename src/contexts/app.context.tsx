@@ -13,7 +13,6 @@ import {
   updateAlwaysOnTop,
   updateAutostart,
   CustomizableState,
-  DEFAULT_CUSTOMIZABLE_STATE,
   CursorType,
   updateCursorType,
 } from "@/lib/storage";
@@ -125,17 +124,58 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       mode: "manual",
       autoPrompt: "Analyze this screenshot and provide insights",
       enabled: true,
+      attachOnEveryRequest: false,
+      // sensible defaults for compression
+      compressionEnabled: true,
+      compressionQuality: 75,
+      compressionMaxDimension: 1600,
     });
 
-  // Unified Customizable State
+  // Unified Customizable State (initialize from persisted storage)
   const [customizable, setCustomizable] = useState<CustomizableState>(
-    DEFAULT_CUSTOMIZABLE_STATE
+    getCustomizableState()
   );
-  const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(false);
+  const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(true);
   const [supportsImages, setSupportsImagesState] = useState<boolean>(() => {
     const stored = safeLocalStorage.getItem(STORAGE_KEYS.SUPPORTS_IMAGES);
     return stored === null ? true : stored === "true";
   });
+
+  // Track whether macOS screen recording permission has been granted (cached across sessions)
+  const [screenRecordingPermissionGranted, setScreenRecordingPermissionGranted] =
+    useState<boolean>(() => {
+      const stored = safeLocalStorage.getItem(STORAGE_KEYS.SCREEN_RECORDING_GRANTED);
+      return stored === "true";
+    });
+
+  const setScreenRecordingPermission = (granted: boolean) => {
+    setScreenRecordingPermissionGranted(granted);
+    safeLocalStorage.setItem(STORAGE_KEYS.SCREEN_RECORDING_GRANTED, String(granted));
+  };
+
+  // On startup, check macOS screen recording permission and cache it (avoid repeated prompting)
+  useEffect(() => {
+    const checkPermission = async () => {
+      try {
+        const platform = navigator.platform.toLowerCase();
+        if (!platform.includes("mac")) return;
+        const { checkScreenRecordingPermission } = await import(
+          "tauri-plugin-macos-permissions-api"
+        );
+        const hasPermission = await checkScreenRecordingPermission();
+        if (hasPermission) {
+          setScreenRecordingPermission(true);
+        }
+      } catch (err) {
+        // ignore failures - plugin may not be available in non-mac builds
+        console.debug("Screen recording permission check failed:", err);
+      }
+    };
+
+    if (!screenRecordingPermissionGranted) {
+      checkPermission();
+    }
+  }, [screenRecordingPermissionGranted]);
 
   // Wrapper to sync supportsImages to localStorage
   const setSupportsImages = (value: boolean) => {
@@ -149,26 +189,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const getActiveLicenseStatus = async () => {
-    const response: { is_active: boolean; is_dev_license: boolean } =
-      await invoke("validate_license_api");
-    setHasActiveLicense(response.is_active);
-
-    if (response?.is_dev_license) {
-      setPluelyApiEnabled(false);
-    }
-
-    // Check if the auto configs are enabled
-    const autoConfigsEnabled = localStorage.getItem("auto-configs-enabled");
-    if (response.is_active && !autoConfigsEnabled) {
-      setScreenshotConfiguration({
-        mode: "auto",
-        autoPrompt: "Analyze the screenshot and provide insights",
-        enabled: false,
-      });
-      // Set the flag to true so that we don't change the mode again
-      localStorage.setItem("auto-configs-enabled", "true");
-    }
+    setHasActiveLicense(true);
+    setPluelyApiEnabled(false);
   };
+
 
   useEffect(() => {
     const syncLicenseState = async () => {
@@ -185,6 +209,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
 
     syncLicenseState();
+
+    // On startup, apply saved app-icon visibility to native layer (macOS/Windows/Linux)
+    const applySavedAppIconVisibility = async () => {
+      try {
+        const saved = getCustomizableState();
+        await invoke("set_app_icon_visibility", {
+          visible: saved.appIcon.isVisible,
+        });
+      } catch (err) {
+        console.debug("Failed to apply saved app icon visibility:", err);
+      }
+    };
+
+    applySavedAppIconVisibility();
   }, [hasActiveLicense]);
 
   // Function to load AI, STT, system prompt and screenshot config data from storage
@@ -211,12 +249,68 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               parsed.autoPrompt ||
               "Analyze this screenshot and provide insights",
             enabled: parsed.enabled !== undefined ? parsed.enabled : false,
+            attachOnEveryRequest:
+              parsed.attachOnEveryRequest !== undefined
+                ? parsed.attachOnEveryRequest
+                : false,
+            attachAudioWithScreenshot:
+              parsed.attachAudioWithScreenshot !== undefined
+                ? parsed.attachAudioWithScreenshot
+                : false,
+            audioAttachMode: parsed.audioAttachMode || "last",
+            audioRecordDurationSeconds:
+              parsed.audioRecordDurationSeconds !== undefined
+                ? parsed.audioRecordDurationSeconds
+                : 3,
+            // Load compression settings with sensible defaults
+            compressionEnabled:
+              parsed.compressionEnabled !== undefined
+                ? parsed.compressionEnabled
+                : true,
+            compressionQuality:
+              parsed.compressionQuality !== undefined
+                ? parsed.compressionQuality
+                : 75,
+            compressionMaxDimension:
+              parsed.compressionMaxDimension !== undefined
+                ? parsed.compressionMaxDimension
+                : 1600,
           });
         }
-      } catch {
-        console.warn("Failed to parse screenshot configuration");
+      } catch (err) {
+        console.warn("Failed to parse screenshot config", err);
       }
     }
+
+    // Ensure we sync persisted "customizable" settings into state
+    try {
+      const persistedCustomizable = getCustomizableState();
+      setCustomizable(persistedCustomizable);
+    } catch (err) {
+      console.warn("Failed to load customizable state", err);
+    }
+
+    // Check macOS screen recording permission once on startup and cache the result
+    (async () => {
+      try {
+        // Only run on macOS
+        const platform = getPlatform();
+        if (platform === "macos") {
+          try {
+            const { checkScreenRecordingPermission } = await import(
+              "tauri-plugin-macos-permissions-api"
+            );
+            const granted = await checkScreenRecordingPermission();
+            setScreenRecordingPermission(granted);
+          } catch (e) {
+            // Ignore if plugin is not available or check fails
+            console.debug("Screen recording permission check failed:", e);
+          }
+        }
+      } catch (e) {
+        console.debug("Failed to check screen recording permission on startup:", e);
+      }
+    })();
 
     // Load custom AI providers
     const savedAi = safeLocalStorage.getItem(STORAGE_KEYS.CUSTOM_AI_PROVIDERS);
@@ -569,13 +663,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Toggle handlers
   const toggleAppIconVisibility = async (isVisible: boolean) => {
+    const previousState = getCustomizableState();
     const newState = updateAppIconVisibility(isVisible);
+
+    // Optimistically update UI so the toggle feels responsive
     setCustomizable(newState);
+
     try {
       await invoke("set_app_icon_visibility", { visible: isVisible });
       loadData();
     } catch (error) {
       console.error("Failed to toggle app icon visibility:", error);
+
+      // Revert UI and persisted state on failure
+      setCustomizable(previousState);
+      setCustomizableState(previousState);
+
+      // Notify user so they know to check system settings or restart the app
+      try {
+        window.alert(
+          "Failed to change app icon visibility. Please check system settings and try restarting the app."
+        );
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
@@ -681,6 +792,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setCursorType,
     supportsImages,
     setSupportsImages,
+    screenRecordingPermissionGranted,
+    setScreenRecordingPermission,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

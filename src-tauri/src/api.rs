@@ -483,6 +483,7 @@ pub async fn chat_stream_response(
     user_message: String,
     system_prompt: Option<String>,
     image_base64: Option<serde_json::Value>,
+    audio_base64: Option<String>,
     history: Option<String>,
 ) -> Result<String, String> {
     // Get stored credentials to get selected model
@@ -553,6 +554,16 @@ pub async fn chat_stream_response(
                 }
             }
         }
+    }
+
+    // Add audio content if provided
+    if let Some(audio_data) = audio_base64 {
+        user_content.push(serde_json::json!({
+            "type": "audio",
+            "audio": {
+                "url": format!("data:audio/wav;base64,{}", audio_data)
+            }
+        }));
     }
 
     // Add user message
