@@ -125,6 +125,16 @@ export const useSettings = () => {
     );
   };
 
+  // Whether to recompress manually attached images when adding files
+  const handleScreenshotRecompressAttachmentsChange = (enabled: boolean) => {
+    const newConfig = { ...screenshotConfiguration, recompressAttachments: enabled };
+    setScreenshotConfiguration(newConfig);
+    safeLocalStorage.setItem(
+      STORAGE_KEYS.SCREENSHOT_CONFIG,
+      JSON.stringify(newConfig)
+    );
+  };
+
   useEffect(() => {
     if (selectedAIProvider.provider) {
       const provider = allAiProviders.find(
@@ -171,6 +181,7 @@ export const useSettings = () => {
     handleScreenshotCompressionEnabledChange,
     handleScreenshotCompressionQualityChange,
     handleScreenshotCompressionMaxDimChange,
+    handleScreenshotRecompressAttachmentsChange,
     allAiProviders,
     allSttProviders,
     selectedAIProvider,

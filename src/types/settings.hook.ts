@@ -16,6 +16,7 @@ export interface UseSettingsReturn {
   handleScreenshotCompressionEnabledChange: (enabled: boolean) => void;
   handleScreenshotCompressionQualityChange: (quality: number) => void;
   handleScreenshotCompressionMaxDimChange: (maxDim: number) => void;
+  handleScreenshotRecompressAttachmentsChange: (enabled: boolean) => void;
   allAiProviders: TYPE_PROVIDER[];
   allSttProviders: TYPE_PROVIDER[];
   selectedAIProvider: { provider: string; variables: Record<string, string> };

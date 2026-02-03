@@ -59,6 +59,8 @@ export interface ScreenshotConfig {
   compressionQuality?: number;
   // Maximum dimension (px) for the longest side before resizing
   compressionMaxDimension?: number;
+  // When true, recompress manually attached images using the same compression settings
+  recompressAttachments?: boolean;
 }
 
 // Speech-to-Text provider types

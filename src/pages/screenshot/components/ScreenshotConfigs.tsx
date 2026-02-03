@@ -23,6 +23,7 @@ export const ScreenshotConfigs = ({
   handleScreenshotCompressionEnabledChange,
   handleScreenshotCompressionQualityChange,
   handleScreenshotCompressionMaxDimChange,
+  handleScreenshotRecompressAttachmentsChange,
   hasActiveLicense,
 }: UseSettingsReturn) => {
   return (
@@ -151,6 +152,83 @@ export const ScreenshotConfigs = ({
               </div>
             </div>
 
+            {/* Compression settings - visible regardless of attach-on-every-request */}
+            <div className="flex justify-between items-center space-x-2 pt-3">
+              <div className="flex-1">
+                <Header
+                  title="Compress screenshots"
+                  description="Reduce image size by resizing and encoding screenshots as JPEG. This speeds up uploads while keeping text legible. Can also recompress manually attached images if enabled."
+                />
+              </div>
+              <div className="flex items-center">
+                <Switch
+                  checked={!!screenshotConfiguration.compressionEnabled}
+                  onCheckedChange={(checked) =>
+                    handleScreenshotCompressionEnabledChange(checked as boolean)
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Compression options */}
+            {screenshotConfiguration.compressionEnabled && (
+              <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">JPEG Quality (1-100)</Label>
+                  <Input
+                    type="number"
+                    min={20}
+                    max={100}
+                    value={screenshotConfiguration.compressionQuality ?? 75}
+                    onChange={(e) =>
+                      handleScreenshotCompressionQualityChange(Number(e.target.value))
+                    }
+                    className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Lower values produce smaller images but reduce clarity.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Max Dimension (px)</Label>
+                  <Input
+                    type="number"
+                    min={400}
+                    max={5000}
+                    value={screenshotConfiguration.compressionMaxDimension ?? 1600}
+                    onChange={(e) =>
+                      handleScreenshotCompressionMaxDimChange(Number(e.target.value))
+                    }
+                    className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum length of the longest side before resizing.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Optionally recompress manually attached images */}
+            {screenshotConfiguration.compressionEnabled && (
+              <div className="flex justify-between items-center space-x-2 pt-3">
+                <div className="flex-1">
+                  <Header
+                    title="Recompress attachments"
+                    description="When enabled, images you attach manually will be recompressed with the same compression settings."
+                  />
+                </div>
+                <div className="flex items-center">
+                  <Switch
+                    checked={!!screenshotConfiguration.recompressAttachments}
+                    onCheckedChange={(checked) =>
+                      handleScreenshotRecompressAttachmentsChange(checked as boolean)
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Audio attachment options for screenshots */}
             {screenshotConfiguration.attachOnEveryRequest && (
               <div className="space-y-2 mt-3">
@@ -219,64 +297,6 @@ export const ScreenshotConfigs = ({
                         </p>
                       </div>
                     )}
-                  </div>
-                )}
-
-                {/* Compression settings */}
-                <div className="flex justify-between items-center space-x-2 pt-3">
-                  <div className="flex-1">
-                    <Header
-                      title="Compress screenshots"
-                      description="Reduce image size by resizing and encoding screenshots as JPEG. This speeds up uploads while keeping text legible."
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <Switch
-                      checked={!!screenshotConfiguration.compressionEnabled}
-                      onCheckedChange={(checked) =>
-                        // handler from props
-                        handleScreenshotCompressionEnabledChange(checked as boolean)
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Compression options */}
-                {screenshotConfiguration.compressionEnabled && (
-                  <div className="grid sm:grid-cols-2 gap-2 mt-3">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">JPEG Quality (1-100)</Label>
-                      <Input
-                        type="number"
-                        min={20}
-                        max={100}
-                        value={screenshotConfiguration.compressionQuality ?? 75}
-                        onChange={(e) =>
-                          handleScreenshotCompressionQualityChange(Number(e.target.value))
-                        }
-                        className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Lower values produce smaller images but reduce clarity.
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">Max Dimension (px)</Label>
-                      <Input
-                        type="number"
-                        min={400}
-                        max={5000}
-                        value={screenshotConfiguration.compressionMaxDimension ?? 1600}
-                        onChange={(e) =>
-                          handleScreenshotCompressionMaxDimChange(Number(e.target.value))
-                        }
-                        className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Maximum length of the longest side before resizing.
-                      </p>
-                    </div>
                   </div>
                 )}
               </div>

@@ -110,13 +110,38 @@ export const useCompletion = () => {
 
   const addFile = useCallback(async (file: File) => {
     try {
-      const base64 = await fileToBase64(file);
+      let base64: string;
+      let type = file.type;
+      let name = file.name;
+
+      const shouldRecompress =
+        screenshotConfiguration?.recompressAttachments &&
+        screenshotConfiguration?.compressionEnabled &&
+        file.type.startsWith("image/");
+
+      if (shouldRecompress) {
+        try {
+          const maxDim = screenshotConfiguration.compressionMaxDimension ?? 1600;
+          const quality = screenshotConfiguration.compressionQuality ?? 75;
+          // dynamic import to keep bundle small
+          const { compressImageFile } = await import("@/lib/utils");
+          base64 = await compressImageFile(file, maxDim, quality);
+          type = "image/jpeg";
+          name = name.replace(/\.[^/.]+$/, "") + ".jpg";
+        } catch (e) {
+          console.warn("Recompression failed, falling back to original file:", e);
+          base64 = await fileToBase64(file);
+        }
+      } else {
+        base64 = await fileToBase64(file);
+      }
+
       const attachedFile: AttachedFile = {
         id: Date.now().toString(),
-        name: file.name,
-        type: file.type,
+        name,
+        type,
         base64,
-        size: file.size,
+        size: base64.length,
       };
 
       setState((prev) => ({
@@ -126,7 +151,7 @@ export const useCompletion = () => {
     } catch (error) {
       console.error("Failed to process file:", error);
     }
-  }, []);
+  }, [screenshotConfiguration]);
 
   const removeFile = useCallback((fileId: string) => {
     setState((prev) => ({

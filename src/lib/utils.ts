@@ -92,3 +92,61 @@ export const isLikelyInvalidScreenshot = async (base64Png: string) => {
     }
   });
 };
+
+// Compress an image File to a JPEG base64 string. Returns base64 WITHOUT the data: prefix.
+export const compressImageFile = async (
+  file: File,
+  maxDim: number = 1600,
+  quality: number = 75
+): Promise<string> => {
+  return new Promise<string>((resolve, reject) => {
+    try {
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          let w = img.width;
+          let h = img.height;
+
+          if (Math.max(w, h) > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("Canvas not supported"));
+
+          // Fill white background to avoid black background when converting PNG (alpha) to JPEG
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+
+          ctx.drawImage(img, 0, 0, w, h);
+
+          const blob: Blob | null = await new Promise((res) =>
+            canvas.toBlob(res, "image/jpeg", Math.min(1, Math.max(0, quality / 100)))
+          );
+
+          if (!blob) return reject(new Error("Failed to create JPEG blob"));
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(",")[1];
+            resolve(base64);
+          };
+          reader.onerror = (e) => reject(e);
+          reader.readAsDataURL(blob);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = (e) => reject(e);
+      img.src = URL.createObjectURL(file);
+    } catch (e) {
+      reject(e);
+    }
+  });
+};
