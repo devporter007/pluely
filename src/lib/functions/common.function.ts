@@ -67,100 +67,141 @@ export function extractVariables(
   }));
 }
 
+
 /**
- * Recursively processes a user message template to replace placeholders for text and images.
+ * Recursively processes a user message template to replace placeholders for text, images, and audio.
  * @param template The user message template object.
  * @param userMessage The user's text message.
  * @param imagesBase64 An array of base64 encoded images.
+ * @param audioBase64 A base64 encoded audio string (optional).
  * @returns The processed user message object.
  */
 export function processUserMessageTemplate(
   template: any,
   userMessage: string,
-  imagesBase64: string[] = []
+  imagesBase64: string[] = [],
+  audioBase64: string = ""
 ): any {
+  // Helper to safely inject text into JSON strings without breaking structure
   const escapeForJson = (value: string) =>
     JSON.stringify(value ?? "").slice(1, -1);
 
+  // 1. Initial Text Replacement
   const templateStr = JSON.stringify(template).replace(
     /\{\{TEXT\}\}/g,
     escapeForJson(userMessage)
   );
   const result = JSON.parse(templateStr);
 
-  const imageReplacer = (node: any): any => {
+  // 2. Recursive Media Replacer
+  const mediaReplacer = (node: any): any => {
     if (Array.isArray(node)) {
-      const imageTemplateIndex = node.findIndex((item) =>
-        JSON.stringify(item).includes("{{IMAGE}}")
-      );
+      // Find where media placeholders are hidden in the array (e.g., Gemini parts)
+      const imageIndex = node.findIndex((item) => JSON.stringify(item).includes("{{IMAGE}}"));
+      const audioIndex = node.findIndex((item) => JSON.stringify(item).includes("{{AUDIO}}"));
 
-      if (imageTemplateIndex > -1) {
-        const imageTemplate = node[imageTemplateIndex];
-        const imageParts =
-          imagesBase64.length > 0
-            ? imagesBase64.map((img) => {
-                const partStr = JSON.stringify(imageTemplate).replace(
-                  /\{\{IMAGE\}\}/g,
-                  img
-                );
-                return JSON.parse(partStr);
-              })
-            : [];
+      let finalArray = [...node];
 
-        const finalArray = [
-          ...node.slice(0, imageTemplateIndex),
-          ...imageParts,
-          ...node.slice(imageTemplateIndex + 1),
-        ];
-        return finalArray.map(imageReplacer);
+      // Handle Audio Replacement (Single)
+      if (audioIndex > -1) {
+        if (audioBase64 && audioBase64.trim() !== "") {
+          const cleanAudio = audioBase64.replace(/^data:.*;base64,/, "");
+          const audioStr = JSON.stringify(finalArray[audioIndex]).replace(/\{\{AUDIO\}\}/g, cleanAudio);
+          finalArray[audioIndex] = JSON.parse(audioStr);
+        } else {
+          // If no audio provided, remove the placeholder object entirely to prevent 400 errors
+          finalArray.splice(audioIndex, 1);
+          // Recalculate imageIndex if audio was before it
+          return mediaReplacer(finalArray); 
+        }
       }
-      return node.map(imageReplacer);
-    } else if (node && typeof node === "object") {
+
+      // Handle Image Replacement (Multiple)
+      // Note: Re-calculating index because the array might have shrunk from audio removal
+      const currentImageIndex = finalArray.findIndex((item) => JSON.stringify(item).includes("{{IMAGE}}"));
+      if (currentImageIndex > -1) {
+        if (imagesBase64.length > 0) {
+          const imageTemplate = finalArray[currentImageIndex];
+          const imageParts = imagesBase64.map((img) => {
+            const cleanImg = img.replace(/^data:.*;base64,/, "");
+            const partStr = JSON.stringify(imageTemplate).replace(/\{\{IMAGE\}\}/g, cleanImg);
+            return JSON.parse(partStr);
+          });
+          
+          finalArray = [
+            ...finalArray.slice(0, currentImageIndex),
+            ...imageParts,
+            ...finalArray.slice(currentImageIndex + 1),
+          ];
+        } else {
+          // Remove empty image placeholders
+          finalArray.splice(currentImageIndex, 1);
+        }
+      }
+
+      return finalArray.map(mediaReplacer);
+    } 
+    
+    // Recursive object walk
+    else if (node && typeof node === "object") {
       const newNode: { [key: string]: any } = {};
       for (const key in node) {
-        newNode[key] = imageReplacer(node[key]);
+        newNode[key] = mediaReplacer(node[key]);
       }
       return newNode;
     }
     return node;
   };
 
-  return imageReplacer(result);
+  return mediaReplacer(result);
 }
 
-/**
- * Builds a dynamic messages array from a template, incorporating history and the current user message.
- * @param messagesTemplate The message template array from the cURL configuration.
- * @param history An array of previous messages in the conversation.
- * @param userMessage The user's current text message.
- * @param imagesBase64 An array of base64 encoded images for the current message.
- * @returns The fully constructed messages array.
- */
 export function buildDynamicMessages(
   messagesTemplate: any[],
   history: Message[],
   userMessage: string,
-  imagesBase64: string[] = []
+  imagesBase64: string[] = [],
+  audioBase64: string = "" // Note: Simplified to string for a single file, or keep as array if your UI supports it
 ): any[] {
+  // Detect if the template is Gemini-style (uses 'parts') or standard (uses 'content')
+  const isGeminiStyle = messagesTemplate.some((m) => !!m.parts);
+
   const userMessageTemplateIndex = messagesTemplate.findIndex((m) =>
     JSON.stringify(m).includes("{{TEXT}}")
   );
 
   if (userMessageTemplateIndex === -1) {
-    return [...history, { role: "user", content: userMessage }]; // Fallback
+    // Standard fallback if no template is found
+    return [...history, { role: "user", content: userMessage }];
   }
+
+  // 1. Format history based on the provider's style
+  const formattedHistory = history.map((msg) => {
+    if (isGeminiStyle) {
+      return {
+        // Gemini strictly uses "model" role for AI responses
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }]
+      };
+    }
+    // Standard format (OpenAI, Anthropic, etc.)
+    return { role: msg.role, content: msg.content };
+  });
 
   const prefixMessages = messagesTemplate.slice(0, userMessageTemplateIndex);
   const suffixMessages = messagesTemplate.slice(userMessageTemplateIndex + 1);
   const userMessageTemplate = messagesTemplate[userMessageTemplateIndex];
 
+  // 2. Process current multimodal message
   const newUserMessage = processUserMessageTemplate(
     userMessageTemplate,
     userMessage,
-    imagesBase64
+    imagesBase64,
+    audioBase64 
   );
 
-  return [...prefixMessages, ...history, newUserMessage, ...suffixMessages];
+  // 3. Assemble: [System/Prefixes] + [History] + [Current Turn] + [Suffixes]
+  return [...prefixMessages, ...formattedHistory, newUserMessage, ...suffixMessages];
 }
 
 /**

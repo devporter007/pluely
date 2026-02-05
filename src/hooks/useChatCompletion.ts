@@ -190,15 +190,15 @@ export const useChatCompletion = (
           content: msg.content,
         }));
 
-        // Handle image attachments
-        const imagesBase64: string[] = [];
-        if (state.attachedFiles.length > 0) {
-          state.attachedFiles.forEach((file) => {
-            if (file.type.startsWith("image/")) {
-              imagesBase64.push(file.base64);
-            }
-          });
-        }
+
+      // Extract both images and audio from attached files
+        const imagesBase64 = state.attachedFiles
+          .filter(f => f.type.startsWith('image/'))
+          .map(f => f.base64);
+
+        const audioBase64 = state.attachedFiles
+          .filter(f => f.type.startsWith('audio/'))
+          .map(f => f.base64)[0]; // Gemini handles one audio file per turn in this logic
 
         // If we captured a screenshot earlier in this flow, include it as well
 
@@ -261,6 +261,7 @@ export const useChatCompletion = (
             history: messageHistory,
             userMessage: input,
             imagesBase64,
+            audioBase64,
             signal,
           })) {
             // Only update if this is still the current request
@@ -441,9 +442,9 @@ export const useChatCompletion = (
 
     files.forEach((file) => {
       if (
-        file.type.startsWith("image/") &&
-        state.attachedFiles.length < MAX_FILES
-      ) {
+      (file.type.startsWith("image/") || file.type.startsWith("audio/")) &&
+      state.attachedFiles.length < MAX_FILES
+    ) {
         addFile(file);
       }
     });

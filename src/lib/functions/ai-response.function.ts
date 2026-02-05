@@ -208,9 +208,11 @@ export async function* fetchAIResponse(params: {
       });
       return;
     }
+
     if (!provider) {
       throw new Error(`Provider not provided`);
     }
+
     if (!selectedProvider) {
       throw new Error(`Selected provider not provided`);
     }
@@ -230,6 +232,7 @@ export async function* fetchAIResponse(params: {
     const requiredVars = extractedVariables.filter(
       ({ key }) => key !== "SYSTEM_PROMPT" && key !== "TEXT" && key !== "IMAGE"
     );
+
     for (const { key } of requiredVars) {
       if (
         !selectedProvider.variables?.[key] ||
@@ -244,6 +247,7 @@ export async function* fetchAIResponse(params: {
     if (!userMessage) {
       throw new Error("User message is required");
     }
+
     if (imagesBase64.length > 0 && !provider.curl.includes("{{IMAGE}}")) {
       throw new Error(
         `Provider ${provider?.id ?? "unknown"} does not support image input`
@@ -259,6 +263,7 @@ export async function* fetchAIResponse(params: {
     let bodyObj: any = curlJson.data
       ? JSON.parse(JSON.stringify(curlJson.data))
       : {};
+
     const messagesKey = Object.keys(bodyObj).find((key) =>
       ["messages", "contents", "conversation", "history"].includes(key)
     );
@@ -268,7 +273,8 @@ export async function* fetchAIResponse(params: {
         bodyObj[messagesKey],
         history,
         userMessage,
-        imagesBase64
+        imagesBase64,
+        audioBase64
       );
       bodyObj[messagesKey] = finalMessages;
     }
@@ -284,12 +290,16 @@ export async function* fetchAIResponse(params: {
     };
 
     // Inject AUDIO variable if present
-    if (audioBase64) {
-      allVariables["AUDIO"] = audioBase64;
-    }
+    const cleanAudio = audioBase64
+      ? audioBase64.replace(/^data:.*;base64,/, "")
+      : "";
+    allVariables["AUDIO"] = cleanAudio;
 
     bodyObj = deepVariableReplacer(bodyObj, allVariables);
     let url = deepVariableReplacer(curlJson.url || "", allVariables);
+
+    console.log("DEBUG: Final URL after replacement:", url);
+    console.log("DEBUG: Variables being used:", allVariables);
 
     const headers = deepVariableReplacer(curlJson.header || {}, allVariables);
     headers["Content-Type"] = "application/json";
@@ -352,8 +362,7 @@ export async function* fetchAIResponse(params: {
         }`;
         return;
       }
-      const content =
-        getByPath(json, provider?.responseContentPath || "") || "";
+      const content = getByPath(json, provider?.responseContentPath || "") || "";
       yield content;
       return;
     }

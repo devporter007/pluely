@@ -51,6 +51,43 @@ export const AI_PROVIDERS = [
     responseContentPath: "choices[0].message.content",
     streaming: true,
   },
+
+  {
+    id: "gemini-multimodal",
+    curl: `curl 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent' \
+  -H "Content-Type: application/json" \
+  -H "x-goog-api-key: {{API_KEY}}" \
+  -X POST \
+  -d '{
+    "systemInstruction": {
+      "parts": [{"text": "{{SYSTEM_PROMPT}}"}]
+    },
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {"text": "{{TEXT}}"},
+          {
+            "inline_data": {
+              "mime_type": "image/png", 
+              "data": "{{IMAGE}}"
+            }
+          },
+          {
+            "inline_data": {
+              "mime_type": "audio/mp3", 
+              "data": "{{AUDIO}}"
+            }
+          }
+
+        ]
+      }
+    ]
+  }'`,
+    responseContentPath: "candidates[0].content.parts[0].text",
+    streaming: false,
+  },
+
   {
     id: "mistral",
     curl: `curl https://api.mistral.ai/v1/chat/completions \\

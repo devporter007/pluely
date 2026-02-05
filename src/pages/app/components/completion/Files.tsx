@@ -5,7 +5,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button, ScrollArea } from "@/components";
-import { PaperclipIcon, XIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { PaperclipIcon, XIcon, PlusIcon, TrashIcon, MusicIcon } from "lucide-react"; // Added MusicIcon
 import { UseCompletionReturn } from "@/types";
 import { MAX_FILES } from "@/config";
 import { useApp } from "@/contexts";
@@ -19,7 +19,7 @@ export const Files = ({
   isFilesPopoverOpen,
   setIsFilesPopoverOpen,
 }: UseCompletionReturn) => {
-  const { supportsImages } = useApp();
+  const { supportsImages } = useApp(); // You might want to rename this to supportsMultimodal later
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddMoreClick = () => {
@@ -36,26 +36,21 @@ export const Files = ({
             size="icon"
             onClick={() => {
               if (attachedFiles.length === 0) {
-                // If no files, directly open file picker
                 fileInputRef.current?.click();
               } else {
-                // If files exist, show popover
                 setIsFilesPopoverOpen(true);
               }
             }}
-            disabled={isLoading || !supportsImages}
+            // 🔥 REMOVE or update !supportsImages if you want audio to work 
+            // even if the provider says it doesn't support "images"
+            disabled={isLoading} 
             className="cursor-pointer"
-            title={
-              supportsImages
-                ? "Attach images"
-                : "Image upload not supported by current AI provider"
-            }
+            title="Attach Files"
           >
             <PaperclipIcon className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
 
-        {/* File count badge */}
         {attachedFiles.length > 0 && (
           <div className="absolute -top-2 -right-2 bg-primary-foreground text-primary rounded-full h-5 w-5 flex border border-primary items-center justify-center text-xs font-medium">
             {attachedFiles.length}
@@ -66,12 +61,12 @@ export const Files = ({
           <PopoverContent
             align="end"
             side="bottom"
-            className="w-screen p-0 border shadow-lg overflow-hidden"
+            className="w-96 p-0 border shadow-lg overflow-hidden"
             sideOffset={8}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
               <h3 className="font-semibold text-sm select-none">
-                Attached Images ({attachedFiles.length}/{MAX_FILES})
+                Attached Files ({attachedFiles.length}/{MAX_FILES})
               </h3>
               <Button
                 size="icon"
@@ -84,8 +79,7 @@ export const Files = ({
               </Button>
             </div>
 
-            <ScrollArea className="p-4 h-[calc(100vh-11rem)]">
-              {/* Grid layout based on number of images */}
+            <ScrollArea className="p-4 h-[320px]">
               <div
                 className={`gap-3 ${
                   attachedFiles.length <= 2
@@ -93,41 +87,47 @@ export const Files = ({
                     : "grid grid-cols-2"
                 }`}
               >
-                {attachedFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="relative group border rounded-lg overflow-hidden bg-muted/20"
-                  >
-                    <img
-                      src={`data:${file.type};base64,${file.base64}`}
-                      alt={file.name}
-                      className={`w-full object-cover h-full`}
-                    />
+                {attachedFiles.map((file) => {
+                  const isAudio = file.type.startsWith("audio/");
+                  
+                  return (
+                    <div key={file.id} className="relative group border rounded-lg overflow-hidden bg-muted/20 aspect-square flex items-center justify-center">
+                      {isAudio ? (
+                        <div className="flex flex-col items-center gap-2 p-4 w-full">
+                          <MusicIcon className="h-8 w-8 text-primary/60" />
+                          <span className="text-[10px] text-center truncate w-full px-2 font-medium">
+                            {file.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <img
+                          src={`data:${file.type};base64,${file.base64}`}
+                          alt={file.name}
+                          className="w-full object-cover h-full"
+                        />
+                      )}
 
-                    {/* File info overlay */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2 text-xs">
-                      <div className="truncate font-medium">{file.name}</div>
-                      <div className="text-gray-300">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-2 text-[10px]">
+                        <div className="truncate font-medium">{file.name}</div>
+                        <div className="text-gray-300">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </div>
                       </div>
+                      
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-2 right-2 h-6 w-6 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => removeFile(file.id)}
+                      >
+                        <XIcon className="h-3 w-3" />
+                      </Button>
                     </div>
-
-                    {/* Remove button */}
-                    <Button
-                      size="icon"
-                      variant="default"
-                      className="absolute top-2 right-2 h-6 w-6 cursor-pointer"
-                      onClick={() => removeFile(file.id)}
-                      title="Remove image"
-                    >
-                      <XIcon className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </ScrollArea>
 
-            {/* Sticky footer with Add More button */}
             <div className="sticky bottom-0 border-t bg-background p-3 flex flex-row gap-2">
               <Button
                 onClick={handleAddMoreClick}
@@ -136,7 +136,7 @@ export const Files = ({
                 variant="outline"
               >
                 <PlusIcon className="h-4 w-4 mr-2" />
-                Add More Images {!canAddMore && `(${MAX_FILES} max)`}
+                Add More
               </Button>
               <Button
                 className="w-2/4"
@@ -144,7 +144,7 @@ export const Files = ({
                 onClick={onRemoveAllFiles}
               >
                 <TrashIcon className="h-4 w-4 mr-2" />
-                Remove All Images
+                Remove All
               </Button>
             </div>
           </PopoverContent>
@@ -155,7 +155,7 @@ export const Files = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*"
+        accept="image/*,audio/*"
         onChange={handleFileSelect}
         className="hidden"
       />

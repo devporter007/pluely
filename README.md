@@ -8,7 +8,7 @@ The system audio attachment feature right now is broken, will have a look later 
 **Extra features:**
 - Completely stripped off license logic
 - Auto screenshot upload with automatic prompt on key press
-
+- Multi-Modal Gemini Support(in built audio, image)(gemini-2.5-flash-lite-preview-09-2025, edit model from ai-providers-constants.rs)
 ---
 
 **Undetectable Everywhere:**
