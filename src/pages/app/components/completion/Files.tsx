@@ -8,7 +8,6 @@ import { Button, ScrollArea } from "@/components";
 import { PaperclipIcon, XIcon, PlusIcon, TrashIcon, MusicIcon } from "lucide-react"; // Added MusicIcon
 import { UseCompletionReturn } from "@/types";
 import { MAX_FILES } from "@/config";
-import { useApp } from "@/contexts";
 
 export const Files = ({
   attachedFiles,
@@ -19,7 +18,6 @@ export const Files = ({
   isFilesPopoverOpen,
   setIsFilesPopoverOpen,
 }: UseCompletionReturn) => {
-  const { supportsImages } = useApp(); // You might want to rename this to supportsMultimodal later
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddMoreClick = () => {

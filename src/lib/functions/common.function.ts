@@ -97,7 +97,6 @@ export function processUserMessageTemplate(
   const mediaReplacer = (node: any): any => {
     if (Array.isArray(node)) {
       // Find where media placeholders are hidden in the array (e.g., Gemini parts)
-      const imageIndex = node.findIndex((item) => JSON.stringify(item).includes("{{IMAGE}}"));
       const audioIndex = node.findIndex((item) => JSON.stringify(item).includes("{{AUDIO}}"));
 
       let finalArray = [...node];

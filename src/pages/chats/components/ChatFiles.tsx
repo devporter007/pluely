@@ -8,7 +8,6 @@ import {
 } from "@/components";
 import { PaperclipIcon, XIcon, PlusIcon, TrashIcon, MusicIcon } from "lucide-react"; // Added MusicIcon
 import { MAX_FILES } from "@/config";
-import { useApp } from "@/contexts";
 
 interface ChatFilesProps {
   attachedFiles: any[];
@@ -31,7 +30,6 @@ export const ChatFiles = ({
   setIsFilesPopoverOpen,
   disabled,
 }: ChatFilesProps) => {
-  const { supportsImages } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddMoreClick = () => {
