@@ -2,7 +2,6 @@ import {
   Settings,
   MessagesSquare,
   WandSparkles,
-  AudioLinesIcon,
   SquareSlashIcon,
   MonitorIcon,
   HomeIcon,
@@ -50,11 +49,6 @@ export const useMenuItems = () => {
       icon: MonitorIcon,
       label: "Screenshot",
       href: "/screenshot",
-    },
-    {
-      icon: AudioLinesIcon,
-      label: "Audio",
-      href: "/audio",
     },
     {
       icon: SquareSlashIcon,

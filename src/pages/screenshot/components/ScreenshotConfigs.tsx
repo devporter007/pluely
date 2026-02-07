@@ -16,9 +16,6 @@ export const ScreenshotConfigs = ({
   handleScreenshotModeChange,
   handleScreenshotPromptChange,
   handleScreenshotEnabledChange,
-  handleAttachAudioWithScreenshotChange,
-  handleScreenshotAudioModeChange,
-  handleScreenshotAudioDurationChange,
   handleScreenshotCompressionEnabledChange,
   handleScreenshotCompressionQualityChange,
   handleScreenshotCompressionMaxDimChange,
@@ -209,78 +206,6 @@ export const ScreenshotConfigs = ({
               </div>
             )}
 
-            {/* Audio attachment options for screenshots */}
-            {screenshotConfiguration.enabled && (
-              <div className="space-y-2 mt-3">
-                <div className="flex justify-between items-center space-x-2">
-                  <div className="flex-1">
-                    <Header
-                      title="Attach system audio"
-                      description="Also attach a short system audio clip (and its transcription) with screenshots."
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <Switch
-                      checked={!!screenshotConfiguration.attachAudioWithScreenshot}
-                      onCheckedChange={(checked) =>
-                        handleAttachAudioWithScreenshotChange(checked)
-                      }
-                    />
-                  </div>
-                </div>
-
-                {screenshotConfiguration.attachAudioWithScreenshot && (
-                  <div className="grid grid-cols-1 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">Audio Mode</Label>
-                      <Select
-                        value={screenshotConfiguration.audioAttachMode || "last"}
-                        onValueChange={(value) =>
-                          handleScreenshotAudioModeChange(value as "last" | "record")
-                        }
-                      >
-                        <SelectTrigger className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors">
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm font-medium">
-                              {screenshotConfiguration.audioAttachMode === "record"
-                                ? "Record now"
-                                : "Use last transcription"}
-                            </div>
-                          </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="last">
-                            <div className="font-medium">Use last transcription</div>
-                          </SelectItem>
-                          <SelectItem value="record">
-                            <div className="font-medium">Record a short clip now</div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {screenshotConfiguration.audioAttachMode === "record" && (
-                      <div className="space-y-1">
-                        <Label className="text-sm font-medium">Record Duration (seconds)</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={screenshotConfiguration.audioRecordDurationSeconds || 3}
-                          onChange={(e) =>
-                            handleScreenshotAudioDurationChange(Number(e.target.value))
-                          }
-                          className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Length of the short audio clip recorded when you take a screenshot.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
       </div>
 
       {/* Tips */}

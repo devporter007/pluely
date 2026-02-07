@@ -77,8 +77,6 @@ export const useCompletion = () => {
     currentConversationId: null,
     conversationHistory: [],
   });
-  const [micOpen, setMicOpen] = useState(false);
-  const [enableVAD, setEnableVAD] = useState(false);
   const [messageHistoryOpen, setMessageHistoryOpen] = useState(false);
   const [isFilesPopoverOpen, setIsFilesPopoverOpen] = useState(false);
   const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
@@ -804,12 +802,9 @@ export const useCompletion = () => {
     keepEngaged;
 
   useEffect(() => {
-    resizeWindow(
-      isPopoverOpen || micOpen || messageHistoryOpen || isFilesPopoverOpen
-    );
+    resizeWindow(isPopoverOpen || messageHistoryOpen || isFilesPopoverOpen);
   }, [
     isPopoverOpen,
-    micOpen,
     messageHistoryOpen,
     resizeWindow,
     isFilesPopoverOpen,
@@ -1017,11 +1012,6 @@ export const useCompletion = () => {
     };
   }, []);
 
-  const toggleRecording = useCallback(() => {
-    setEnableVAD(!enableVAD);
-    setMicOpen(!micOpen);
-  }, [enableVAD, micOpen]);
-
   // Cleanup abort controller on unmount
   useEffect(() => {
     return () => {
@@ -1035,14 +1025,11 @@ export const useCompletion = () => {
 
   // register callbacks for global shortcuts
   useEffect(() => {
-    globalShortcuts.registerAudioCallback(toggleRecording);
     globalShortcuts.registerInputRef(inputRef.current);
     globalShortcuts.registerScreenshotCallback(captureScreenshot);
   }, [
-    globalShortcuts.registerAudioCallback,
     globalShortcuts.registerInputRef,
     globalShortcuts.registerScreenshotCallback,
-    toggleRecording,
     captureScreenshot,
     inputRef,
   ]);
@@ -1062,10 +1049,6 @@ export const useCompletion = () => {
     cancel,
     reset,
     setState,
-    enableVAD,
-    setEnableVAD,
-    micOpen,
-    setMicOpen,
     currentConversationId: state.currentConversationId,
     conversationHistory: state.conversationHistory,
     loadConversation,

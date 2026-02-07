@@ -6,9 +6,7 @@ import { getShortcutsConfig } from "@/lib";
 // Global singleton to prevent multiple event listeners in StrictMode
 let globalEventListeners: {
   focus?: UnlistenFn;
-  audio?: UnlistenFn;
   screenshot?: UnlistenFn;
-  systemAudio?: UnlistenFn;
   customShortcut?: UnlistenFn;
   registrationError?: UnlistenFn;
 } = {};
@@ -18,16 +16,12 @@ let lastScreenshotEventTime = 0;
 
 // Global callback refs
 let globalInputRef: HTMLInputElement | null = null;
-let globalAudioCallback: (() => void) | null = null;
 let globalScreenshotCallback: (() => void | Promise<void>) | null = null;
-let globalSystemAudioCallback: (() => void) | null = null;
 let globalCustomShortcutCallbacks: Map<string, () => void> = new Map();
 
 export const useGlobalShortcuts = () => {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const audioCallbackRef = useRef<(() => void) | null>(null);
   const screenshotCallbackRef = useRef<(() => void) | null>(null);
-  const systemAudioCallbackRef = useRef<(() => void) | null>(null);
   const customShortcutCallbacksRef = useRef<Map<string, () => void>>(new Map());
 
   const checkShortcutsRegistered = useCallback(async (): Promise<boolean> => {
@@ -72,12 +66,6 @@ export const useGlobalShortcuts = () => {
     globalInputRef = input;
   }, []);
 
-  // Register audio callback
-  const registerAudioCallback = useCallback((callback: () => void) => {
-    audioCallbackRef.current = callback;
-    globalAudioCallback = callback;
-  }, []);
-
   // Register screenshot callback
   const registerScreenshotCallback = useCallback(
     (callback: () => void | Promise<void>) => {
@@ -86,12 +74,6 @@ export const useGlobalShortcuts = () => {
     },
     []
   );
-
-  // Register system audio callback
-  const registerSystemAudioCallback = useCallback((callback: () => void) => {
-    systemAudioCallbackRef.current = callback;
-    globalSystemAudioCallback = callback;
-  }, []);
 
   // Register custom shortcut callback
   const registerCustomShortcutCallback = useCallback(
@@ -120,25 +102,11 @@ export const useGlobalShortcuts = () => {
             console.warn("Error cleaning up focus listener:", error);
           }
         }
-        if (globalEventListeners.audio) {
-          try {
-            globalEventListeners.audio();
-          } catch (error) {
-            console.warn("Error cleaning up audio listener:", error);
-          }
-        }
         if (globalEventListeners.screenshot) {
           try {
             globalEventListeners.screenshot();
           } catch (error) {
             console.warn("Error cleaning up screenshot listener:", error);
-          }
-        }
-        if (globalEventListeners.systemAudio) {
-          try {
-            globalEventListeners.systemAudio();
-          } catch (error) {
-            console.warn("Error cleaning up system audio listener:", error);
           }
         }
         if (globalEventListeners.customShortcut) {
@@ -168,14 +136,6 @@ export const useGlobalShortcuts = () => {
           }, 100);
         });
         globalEventListeners.focus = unlistenFocus;
-
-        // Listen for audio recording event
-        const unlistenAudio = await listen("start-audio-recording", () => {
-          if (globalAudioCallback) {
-            globalAudioCallback();
-          }
-        });
-        globalEventListeners.audio = unlistenAudio;
 
         // Listen for screenshot trigger event with debouncing
         const unlistenScreenshot = await listen("trigger-screenshot", () => {
@@ -211,14 +171,6 @@ export const useGlobalShortcuts = () => {
           }
         });
         globalEventListeners.screenshot = unlistenScreenshot;
-
-        // Listen for system audio toggle event
-        const unlistenSystemAudio = await listen("toggle-system-audio", () => {
-          if (globalSystemAudioCallback) {
-            globalSystemAudioCallback();
-          }
-        });
-        globalEventListeners.systemAudio = unlistenSystemAudio;
 
         // Listen for custom shortcut events
         const unlistenCustomShortcut = await listen<{ action: string }>(
@@ -260,9 +212,7 @@ export const useGlobalShortcuts = () => {
     getShortcuts,
     updateShortcuts,
     registerInputRef,
-    registerAudioCallback,
     registerScreenshotCallback,
-    registerSystemAudioCallback,
     registerCustomShortcutCallback,
     unregisterCustomShortcutCallback,
   };

@@ -57,9 +57,6 @@ export const useChatCompletion = (
     systemPrompt,
     screenshotConfiguration,
     setScreenshotConfiguration,
-    selectedSttProvider,
-    allSttProviders,
-    selectedAudioDevices,
     hasActiveLicense,
 
   } = useApp();
@@ -71,8 +68,6 @@ export const useChatCompletion = (
     attachedFiles: [],
   });
 
-  const [micOpen, setMicOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [isFilesPopoverOpen, setIsFilesPopoverOpen] = useState(false);
   const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
 
@@ -760,10 +755,6 @@ export const useChatCompletion = (
     submit,
     cancel,
     setState,
-    isRecording,
-    setIsRecording,
-    micOpen,
-    setMicOpen,
     screenshotConfiguration,
     setScreenshotConfiguration,
     handleScreenshotSubmit,
@@ -777,9 +768,6 @@ export const useChatCompletion = (
     captureScreenshot,
     isScreenshotLoading,
     messagesEndRef,
-    selectedSttProvider,
-    allSttProviders,
-    selectedAudioDevices,
     hasActiveLicense,
   };
 };

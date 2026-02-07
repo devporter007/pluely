@@ -6,6 +6,5 @@ export { default as SystemPrompts } from "./system-prompts";
 export { default as Settings } from "./settings";
 export { default as DevSpace } from "./dev";
 export { default as Shortcuts } from "./shortcuts";
-export { default as Audio } from "./audio";
 export { default as Screenshot } from "./screenshot";
 export { default as Responses } from "./responses";

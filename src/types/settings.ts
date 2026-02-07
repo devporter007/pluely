@@ -44,12 +44,6 @@ export interface ScreenshotConfig {
   mode: ScreenshotMode;
   autoPrompt: string;
   enabled: boolean;
-  // When true, also attach a short system audio recording when a screenshot is taken
-  attachAudioWithScreenshot?: boolean;
-  // Mode for audio attachment: 'last' = use most recent stt snippet, 'record' = record a short clip at screenshot time
-  audioAttachMode?: "last" | "record";
-  // If audioAttachMode is 'record', duration (in seconds) to record for the clip
-  audioRecordDurationSeconds?: number;
 
   // Compression settings: when enabled, screenshots will be resized and encoded as JPEG
   compressionEnabled?: boolean;

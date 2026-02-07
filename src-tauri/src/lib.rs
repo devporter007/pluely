@@ -5,24 +5,14 @@ mod capture;
 mod db;
 mod shortcuts;
 mod window;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_posthog::{init as posthog_init, PostHogConfig, PostHogOptions};
-use tokio::task::JoinHandle;
-mod speaker;
 use capture::CaptureState;
-use speaker::VadConfig;
 
 #[cfg(target_os = "macos")]
 #[allow(deprecated)]
 use tauri_nspanel::{cocoa::appkit::NSWindowCollectionBehavior, panel_delegate, WebviewWindowExt};
-
-#[derive(Default)]
-pub struct AudioState {
-    stream_task: Arc<Mutex<Option<JoinHandle<()>>>>,
-    vad_config: Arc<Mutex<VadConfig>>,
-    is_capturing: Arc<Mutex<bool>>,
-}
 
 #[tauri::command]
 fn get_app_version() -> String {
@@ -39,7 +29,6 @@ pub fn run() {
                 .add_migrations("sqlite:pluely.db", db::migrations())
                 .build(),
         )
-        .manage(AudioState::default())
         .manage(CaptureState::default())
         .manage(shortcuts::WindowVisibility {
             is_hidden: Mutex::new(false),
@@ -104,17 +93,6 @@ pub fn run() {
             api::create_system_prompt,
             api::check_license_status,
             api::get_activity,
-            speaker::start_system_audio_capture,
-            speaker::stop_system_audio_capture,
-            speaker::manual_stop_continuous,
-            speaker::check_system_audio_access,
-            speaker::request_system_audio_access,
-            speaker::get_vad_config,
-            speaker::update_vad_config,
-            speaker::get_capture_status,
-            speaker::get_audio_sample_rate,
-            speaker::get_input_devices,
-            speaker::get_output_devices,
         ])
         .setup(|app| {
             // Setup main window positioning

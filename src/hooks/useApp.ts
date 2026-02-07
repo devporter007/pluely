@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { useTitles, useSystemAudio } from "@/hooks";
+import { useTitles } from "@/hooks";
 import { listen } from "@tauri-apps/api/event";
 import { safeLocalStorage, migrateLocalStorageToSQLite } from "@/lib";
 import { getShortcutsConfig } from "@/lib/storage";
 import { invoke } from "@tauri-apps/api/core";
 
 export const useApp = () => {
-  const systemAudio = useSystemAudio();
   const [isHidden, setIsHidden] = useState(false);
   // Initialize title management
   useTitles();
@@ -152,6 +151,5 @@ export const useApp = () => {
     setIsHidden,
     handleSelectConversation,
     handleNewConversation,
-    systemAudio,
   };
 };

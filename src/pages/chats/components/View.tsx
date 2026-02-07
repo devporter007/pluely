@@ -28,10 +28,8 @@ import { useHistory, useChatCompletion } from "@/hooks";
 import { useApp } from "@/contexts";
 import {
   DeleteConfirmationDialog,
-  ChatAudio,
   ChatScreenshot,
   ChatFiles,
-  AudioRecorder,
 } from ".";
 
 const View = () => {
@@ -251,74 +249,57 @@ const View = () => {
             </div>
           )}
           <div className="flex-1 relative">
-            {completion.isRecording ? (
-              <AudioRecorder
-                onTranscriptionComplete={(text) => {
-                  completion.setIsRecording(false);
-                  completion.submit(text);
-                }}
-                onCancel={() => completion.setIsRecording(false)}
-              />
-            ) : (
-              <>
-                <div className="absolute bottom-2 left-2 flex items-center gap-1 z-10">
-                  <ChatFiles
-                    attachedFiles={completion.attachedFiles}
-                    handleFileSelect={completion.handleFileSelect}
-                    removeFile={completion.removeFile}
-                    onRemoveAllFiles={completion.onRemoveAllFiles}
-                    isLoading={completion.isLoading}
-                    isFilesPopoverOpen={completion.isFilesPopoverOpen}
-                    setIsFilesPopoverOpen={completion.setIsFilesPopoverOpen}
-                    disabled={!hasActiveLicense || !supportsImages}
-                  />
-                  <ChatAudio
-                    micOpen={completion.micOpen}
-                    setMicOpen={completion.setMicOpen}
-                    isRecording={completion.isRecording}
-                    setIsRecording={completion.setIsRecording}
-                    disabled={!hasActiveLicense}
-                  />
-                  <ChatScreenshot
-                    screenshotConfiguration={completion.screenshotConfiguration}
-                    attachedFiles={completion.attachedFiles}
-                    isLoading={completion.isLoading}
-                    captureScreenshot={completion.captureScreenshot}
-                    isScreenshotLoading={completion.isScreenshotLoading}
-                    disabled={!hasActiveLicense || !supportsImages}
-                  />
-                </div>
-
-                <Textarea
-                  ref={completion.inputRef}
-                  placeholder="Type a message..."
-                  className="pr-12 pl-2 resize-none pb-12 pt-3"
-                  rows={2}
-                  value={completion.input}
-                  onChange={(e) => completion.setInput(e.target.value)}
-                  onKeyDown={completion.handleKeyPress}
-                  onPaste={completion.handlePaste}
-                  disabled={completion.isLoading || !hasActiveLicense}
+            <>
+              <div className="absolute bottom-2 left-2 flex items-center gap-1 z-10">
+                <ChatFiles
+                  attachedFiles={completion.attachedFiles}
+                  handleFileSelect={completion.handleFileSelect}
+                  removeFile={completion.removeFile}
+                  onRemoveAllFiles={completion.onRemoveAllFiles}
+                  isLoading={completion.isLoading}
+                  isFilesPopoverOpen={completion.isFilesPopoverOpen}
+                  setIsFilesPopoverOpen={completion.setIsFilesPopoverOpen}
+                  disabled={!hasActiveLicense || !supportsImages}
                 />
-                <Button
-                  size="icon"
-                  className="size-7 lg:size-9 rounded-lg lg:rounded-xl absolute right-2 bottom-2"
-                  title="Send message"
-                  onClick={() => completion.submit()}
-                  disabled={
-                    completion.isLoading ||
-                    !completion.input.trim() ||
-                    !hasActiveLicense
-                  }
-                >
-                  {completion.isLoading ? (
-                    <Loader2 className="size-3 lg:size-4 animate-spin" />
-                  ) : (
-                    <SendIcon className="size-3 lg:size-4" />
-                  )}
-                </Button>
-              </>
-            )}
+                <ChatScreenshot
+                  screenshotConfiguration={completion.screenshotConfiguration}
+                  attachedFiles={completion.attachedFiles}
+                  isLoading={completion.isLoading}
+                  captureScreenshot={completion.captureScreenshot}
+                  isScreenshotLoading={completion.isScreenshotLoading}
+                  disabled={!hasActiveLicense || !supportsImages}
+                />
+              </div>
+
+              <Textarea
+                ref={completion.inputRef}
+                placeholder="Type a message..."
+                className="pr-12 pl-2 resize-none pb-12 pt-3"
+                rows={2}
+                value={completion.input}
+                onChange={(e) => completion.setInput(e.target.value)}
+                onKeyDown={completion.handleKeyPress}
+                onPaste={completion.handlePaste}
+                disabled={completion.isLoading || !hasActiveLicense}
+              />
+              <Button
+                size="icon"
+                className="size-7 lg:size-9 rounded-lg lg:rounded-xl absolute right-2 bottom-2"
+                title="Send message"
+                onClick={() => completion.submit()}
+                disabled={
+                  completion.isLoading ||
+                  !completion.input.trim() ||
+                  !hasActiveLicense
+                }
+              >
+                {completion.isLoading ? (
+                  <Loader2 className="size-3 lg:size-4 animate-spin" />
+                ) : (
+                  <SendIcon className="size-3 lg:size-4" />
+                )}
+              </Button>
+            </>
           </div>
         </div>
       </div>

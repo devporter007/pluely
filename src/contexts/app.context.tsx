@@ -74,27 +74,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       DEFAULT_SYSTEM_PROMPT
   );
 
-  const [selectedAudioDevices, setSelectedAudioDevices] = useState<{
-    input: { id: string; name: string };
-    output: { id: string; name: string };
-  }>(() => {
-    const savedDevices = safeLocalStorage.getItem(
-      STORAGE_KEYS.SELECTED_AUDIO_DEVICES
-    );
-    if (savedDevices) {
-      try {
-        return JSON.parse(savedDevices);
-      } catch {
-        // Return default on parse error
-      }
-    }
-
-    return {
-      input: { id: "", name: "" },
-      output: { id: "", name: "" },
-    };
-  });
-
   // AI Providers
   const [customAiProviders, setCustomAiProviders] = useState<TYPE_PROVIDER[]>(
     []
@@ -248,15 +227,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               parsed.autoPrompt ||
               "Analyze this screenshot and provide insights",
             enabled: parsed.enabled !== undefined ? parsed.enabled : false,
-            attachAudioWithScreenshot:
-              parsed.attachAudioWithScreenshot !== undefined
-                ? parsed.attachAudioWithScreenshot
-                : false,
-            audioAttachMode: parsed.audioAttachMode || "last",
-            audioRecordDurationSeconds:
-              parsed.audioRecordDurationSeconds !== undefined
-                ? parsed.audioRecordDurationSeconds
-                : 3,
             // Load compression settings with sensible defaults
             compressionEnabled:
               parsed.compressionEnabled !== undefined
@@ -373,20 +343,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setPluelyApiEnabledState(savedPluelyApiEnabled === "true");
     }
 
-    // Load selected audio devices
-    const savedAudioDevices = safeLocalStorage.getItem(
-      STORAGE_KEYS.SELECTED_AUDIO_DEVICES
-    );
-    if (savedAudioDevices) {
-      try {
-        const parsed = JSON.parse(savedAudioDevices);
-        if (parsed && typeof parsed === "object") {
-          setSelectedAudioDevices(parsed);
-        }
-      } catch {
-        console.warn("Failed to parse selected audio devices");
-      }
-    }
   };
 
   const updateCursor = (type: CursorType | undefined) => {
@@ -529,8 +485,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         e.key === STORAGE_KEYS.SELECTED_STT_PROVIDER ||
         e.key === STORAGE_KEYS.SYSTEM_PROMPT ||
         e.key === STORAGE_KEYS.SCREENSHOT_CONFIG ||
-        e.key === STORAGE_KEYS.CUSTOMIZABLE ||
-        e.key === STORAGE_KEYS.SELECTED_AUDIO_DEVICES
+        e.key === STORAGE_KEYS.CUSTOMIZABLE
       ) {
         loadData();
       }
@@ -782,8 +737,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     hasActiveLicense,
     setHasActiveLicense,
     getActiveLicenseStatus,
-    selectedAudioDevices,
-    setSelectedAudioDevices,
     setCursorType,
     supportsImages,
     setSupportsImages,

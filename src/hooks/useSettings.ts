@@ -62,33 +62,6 @@ export const useSettings = () => {
   };
 
 
-  const handleAttachAudioWithScreenshotChange = (enabled: boolean) => {
-    const newConfig = { ...screenshotConfiguration, attachAudioWithScreenshot: enabled };
-    setScreenshotConfiguration(newConfig);
-    safeLocalStorage.setItem(
-      STORAGE_KEYS.SCREENSHOT_CONFIG,
-      JSON.stringify(newConfig)
-    );
-  };
-
-  const handleScreenshotAudioModeChange = (mode: "last" | "record") => {
-    const newConfig = { ...screenshotConfiguration, audioAttachMode: mode };
-    setScreenshotConfiguration(newConfig);
-    safeLocalStorage.setItem(
-      STORAGE_KEYS.SCREENSHOT_CONFIG,
-      JSON.stringify(newConfig)
-    );
-  };
-
-  const handleScreenshotAudioDurationChange = (seconds: number) => {
-    const newConfig = { ...screenshotConfiguration, audioRecordDurationSeconds: seconds };
-    setScreenshotConfiguration(newConfig);
-    safeLocalStorage.setItem(
-      STORAGE_KEYS.SCREENSHOT_CONFIG,
-      JSON.stringify(newConfig)
-    );
-  };
-
   // Compression settings handlers
   const handleScreenshotCompressionEnabledChange = (enabled: boolean) => {
     const newConfig = { ...screenshotConfiguration, compressionEnabled: enabled };
@@ -166,9 +139,6 @@ export const useSettings = () => {
     handleScreenshotModeChange,
     handleScreenshotPromptChange,
     handleScreenshotEnabledChange,
-    handleAttachAudioWithScreenshotChange,
-    handleScreenshotAudioModeChange,
-    handleScreenshotAudioDurationChange,
     handleScreenshotCompressionEnabledChange,
     handleScreenshotCompressionQualityChange,
     handleScreenshotCompressionMaxDimChange,
