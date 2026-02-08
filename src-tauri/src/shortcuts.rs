@@ -107,7 +107,6 @@ pub fn handle_shortcut_action<R: Runtime>(app: &AppHandle<R>, action_id: &str) {
         "move_window_left" => handle_move_window(app, "left"),
         "move_window_right" => handle_move_window(app, "right"),
         "screenshot" => handle_screenshot_shortcut(app),
-        "attach_system_audio" => handle_attach_system_audio_shortcut(app),
         custom_action => {
             // Emit custom action event for frontend to handle
             if let Some(window) = app.get_webview_window("main") {
@@ -258,15 +257,6 @@ fn handle_screenshot_shortcut<R: Runtime>(app: &AppHandle<R>) {
         // Emit event to trigger screenshot - frontend will determine auto/manual mode
         if let Err(e) = window.emit("trigger-screenshot", json!({})) {
             eprintln!("Failed to emit screenshot event: {}", e);
-        }
-    }
-}
-
-/// Handle attach system audio shortcut: emit event so frontend gets last N seconds and adds to chat.
-fn handle_attach_system_audio_shortcut<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
-        if let Err(e) = window.emit("trigger-attach-system-audio", json!({})) {
-            eprintln!("Failed to emit trigger-attach-system-audio event: {}", e);
         }
     }
 }

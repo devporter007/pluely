@@ -1,11 +1,10 @@
 //! Passive background system audio daemon: records last N seconds of system audio
-//! and returns them as WAV base64 when requested (e.g. on shortcut).
+//! and returns them as Opus/OGG base64 when requested (e.g. on screenshot shortcut).
 //!
 //! On macOS 14.2+: uses Core Audio Process Tap API (no BlackHole required).
 //! On other platforms: returns "unsupported".
 
 use base64::Engine;
-use hound::{WavSpec, WavWriter};
 use serde::Serialize;
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +13,11 @@ use std::thread;
 
 pub(crate) const SAMPLE_RATE: u32 = 48000;
 pub(crate) const CHANNELS: u16 = 2;
+
+/// Output sample rate for Opus encoding (speech-optimized).
+const OUTPUT_SAMPLE_RATE: u32 = 16000;
+/// Output is mono.
+const OUTPUT_CHANNELS: u16 = 1;
 
 /// Max buffer we allocate (seconds). Actual used length is set on start.
 const MAX_BUFFER_SECONDS: u32 = 300;
@@ -116,7 +120,9 @@ impl SystemAudioState {
         }
     }
 
-    /// Snapshot the last N seconds (logical_len) from the ring buffer and encode as WAV base64.
+    /// Snapshot the last N seconds (logical_len) from the ring buffer,
+    /// downsample to 16 kHz mono, encode as Opus inside an OGG container,
+    /// and return the result as a base64 string.
     pub fn get_recent_base64(&self) -> Result<String, String> {
         let (buffer, write_index, logical_len) = {
             let buf = self.buffer.lock().map_err(|e| e.to_string())?;
@@ -128,28 +134,124 @@ impl SystemAudioState {
             return Err("No audio recorded yet".to_string());
         }
         let cap = self.capacity;
-        // Last logical_len samples: from (write_index + cap - logical_len) % cap to (write_index + cap - 1) % cap.
+
+        // --- 1. Read ring buffer in order ---
         let start = (write_index + cap - logical_len) % cap;
         let mut ordered: Vec<f32> = Vec::with_capacity(logical_len);
         for i in 0..logical_len {
             let j = (start + i) % cap;
             ordered.push(buffer[j]);
         }
-        // Convert f32 [-1,1] to i16 and write WAV.
-        let mut cursor = Cursor::new(Vec::new());
-        let spec = WavSpec {
-            channels: CHANNELS,
-            sample_rate: SAMPLE_RATE,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut writer = WavWriter::new(&mut cursor, spec).map_err(|e| e.to_string())?;
-        for &s in &ordered {
-            let clamped = s.clamp(-1.0, 1.0);
-            let sample_i16 = (clamped * 32767.0) as i16;
-            writer.write_sample(sample_i16).map_err(|e| e.to_string())?;
+
+        // --- 2. Downsample 48 kHz stereo → 16 kHz mono ---
+        // Ratio = SAMPLE_RATE / OUTPUT_SAMPLE_RATE = 3
+        // For every 3 stereo frames (6 interleaved samples) → 1 mono sample
+        let ratio = (SAMPLE_RATE / OUTPUT_SAMPLE_RATE) as usize; // 3
+        let stereo_frame_size = CHANNELS as usize;                // 2
+        let group = ratio * stereo_frame_size;                    // 6
+        let num_output_samples = ordered.len() / group;
+        let mut mono16k: Vec<f32> = Vec::with_capacity(num_output_samples);
+        for chunk in ordered.chunks_exact(group) {
+            let sum: f32 = chunk.iter().sum();
+            mono16k.push(sum / group as f32);
         }
-        writer.finalize().map_err(|e| e.to_string())?;
+
+        // --- 3. Encode as Opus inside OGG ---
+        let mut encoder = opus::Encoder::new(
+            OUTPUT_SAMPLE_RATE,
+            opus::Channels::Mono,
+            opus::Application::Voip,
+        )
+        .map_err(|e| format!("Opus encoder init: {}", e))?;
+
+        let frame_size: usize = (OUTPUT_SAMPLE_RATE as usize) * 20 / 1000; // 320 samples (20 ms)
+        let mut cursor = Cursor::new(Vec::<u8>::new());
+
+        {
+            let mut pw = ogg::writing::PacketWriter::new(&mut cursor);
+            let serial: u32 = 0x504C5545; // "PLUE"
+
+            // -- OpusHead --
+            let pre_skip: u16 = 312;
+            let mut head = Vec::with_capacity(19);
+            head.extend_from_slice(b"OpusHead");
+            head.push(1); // version
+            head.push(OUTPUT_CHANNELS as u8);
+            head.extend_from_slice(&pre_skip.to_le_bytes());
+            head.extend_from_slice(&OUTPUT_SAMPLE_RATE.to_le_bytes());
+            head.extend_from_slice(&0u16.to_le_bytes()); // output gain
+            head.push(0); // channel mapping family
+            pw.write_packet(
+                head,
+                serial,
+                ogg::writing::PacketWriteEndInfo::EndPage,
+                0,
+            )
+            .map_err(|e| format!("OGG write OpusHead: {}", e))?;
+
+            // -- OpusTags --
+            let vendor = b"pluely";
+            let mut tags = Vec::new();
+            tags.extend_from_slice(b"OpusTags");
+            tags.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+            tags.extend_from_slice(vendor);
+            tags.extend_from_slice(&0u32.to_le_bytes()); // 0 comments
+            pw.write_packet(
+                tags,
+                serial,
+                ogg::writing::PacketWriteEndInfo::EndPage,
+                0,
+            )
+            .map_err(|e| format!("OGG write OpusTags: {}", e))?;
+
+            // -- Audio packets --
+            // Granule position is always at 48 kHz for Opus
+            let granule_increment: u64 = 960; // 20 ms at 48 kHz
+            let mut granule_pos: u64 = 0;
+            let total_frames = mono16k.len() / frame_size;
+            let mut encode_buf = vec![0u8; 4000]; // max Opus packet
+
+            for i in 0..total_frames {
+                let frame = &mono16k[i * frame_size..(i + 1) * frame_size];
+                let n = encoder
+                    .encode_float(frame, &mut encode_buf)
+                    .map_err(|e| format!("Opus encode: {}", e))?;
+                granule_pos += granule_increment;
+
+                let end_info = if i == total_frames - 1 {
+                    ogg::writing::PacketWriteEndInfo::EndStream
+                } else {
+                    ogg::writing::PacketWriteEndInfo::NormalPacket
+                };
+                pw.write_packet(
+                    encode_buf[..n].to_vec(),
+                    serial,
+                    end_info,
+                    granule_pos,
+                )
+                .map_err(|e| format!("OGG write audio: {}", e))?;
+            }
+
+            // Handle remaining samples (pad with silence to fill a frame)
+            let remainder = mono16k.len() % frame_size;
+            if remainder > 0 {
+                let mut last_frame = vec![0.0f32; frame_size];
+                let offset = total_frames * frame_size;
+                last_frame[..remainder].copy_from_slice(&mono16k[offset..offset + remainder]);
+                let n = encoder
+                    .encode_float(&last_frame, &mut encode_buf)
+                    .map_err(|e| format!("Opus encode tail: {}", e))?;
+                granule_pos += granule_increment;
+                pw.write_packet(
+                    encode_buf[..n].to_vec(),
+                    serial,
+                    ogg::writing::PacketWriteEndInfo::EndStream,
+                    granule_pos,
+                )
+                .map_err(|e| format!("OGG write tail: {}", e))?;
+            }
+        }
+
         let bytes = cursor.into_inner();
         Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
     }
@@ -206,7 +308,7 @@ pub async fn system_audio_stop(state: tauri::State<'_, Arc<SystemAudioState>>) -
     Ok(())
 }
 
-/// Get the last N seconds of system audio as base64 WAV.
+/// Get the last N seconds of system audio as base64 OGG/Opus (16 kHz mono).
 #[tauri::command]
 pub async fn system_audio_get_recent_base64(
     state: tauri::State<'_, Arc<SystemAudioState>>,

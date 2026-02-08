@@ -51,14 +51,5 @@ export const DEFAULT_SHORTCUT_ACTIONS: ShortcutAction[] = [
       linux: "ctrl+shift+s",
     },
   },
-  {
-    id: "attach_system_audio",
-    name: "Attach system audio",
-    description: "Attach last N seconds of system audio to chat (requires system audio daemon on)",
-    defaultKey: {
-      macos: "cmd+shift+a",
-      windows: "ctrl+shift+a",
-      linux: "ctrl+shift+a",
-    },
-  },
+
 ];

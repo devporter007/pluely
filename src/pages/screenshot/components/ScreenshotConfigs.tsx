@@ -9,6 +9,7 @@ import {
   Switch,
 } from "@/components";
 import { UseSettingsReturn } from "@/types";
+import { useState, useEffect } from "react";
 import { LaptopMinimalIcon, MousePointer2Icon } from "lucide-react";
 
 export const ScreenshotConfigs = ({
@@ -25,6 +26,34 @@ export const ScreenshotConfigs = ({
   handleSystemAudioDaemonBufferSecondsChange,
   hasActiveLicense,
 }: UseSettingsReturn) => {
+
+    // ---- local draft input state (smooth typing) ----
+  const [bufferInput, setBufferInput] = useState(
+    String(systemAudioDaemonConfig.bufferSeconds ?? 30)
+  );
+  const [qualityInput, setQualityInput] = useState(
+    String(screenshotConfiguration.compressionQuality ?? 75)
+  );
+  const [maxDimInput, setMaxDimInput] = useState(
+    String(screenshotConfiguration.compressionMaxDimension ?? 1600)
+  );
+
+  // ---- sync drafts when external config changes ----
+  useEffect(() => {
+    setBufferInput(String(systemAudioDaemonConfig.bufferSeconds ?? 30));
+  }, [systemAudioDaemonConfig.bufferSeconds]);
+
+  useEffect(() => {
+    setQualityInput(String(screenshotConfiguration.compressionQuality ?? 75));
+  }, [screenshotConfiguration.compressionQuality]);
+
+  useEffect(() => {
+    setMaxDimInput(
+      String(screenshotConfiguration.compressionMaxDimension ?? 1600)
+    );
+  }, [screenshotConfiguration.compressionMaxDimension]);
+
+
   return (
     <div id="screenshot" className="space-y-3">
       <div className="space-y-3">
@@ -159,10 +188,14 @@ export const ScreenshotConfigs = ({
                     type="number"
                     min={20}
                     max={100}
-                    value={screenshotConfiguration.compressionQuality ?? 75}
-                    onChange={(e) =>
-                      handleScreenshotCompressionQualityChange(Number(e.target.value))
-                    }
+                    value={qualityInput}
+                    onChange={(e) => setQualityInput(e.target.value)}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      const finalValue = Number.isNaN(v) ? 75 : Math.min(100, Math.max(1, v));
+                      setQualityInput(String(finalValue));
+                      handleScreenshotCompressionQualityChange(finalValue);
+                    }}
                     className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
                   />
                   <p className="text-xs text-muted-foreground">
@@ -176,10 +209,14 @@ export const ScreenshotConfigs = ({
                     type="number"
                     min={400}
                     max={5000}
-                    value={screenshotConfiguration.compressionMaxDimension ?? 1600}
-                    onChange={(e) =>
-                      handleScreenshotCompressionMaxDimChange(Number(e.target.value))
-                    }
+                    value={maxDimInput}
+                    onChange={(e) => setMaxDimInput(e.target.value)}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      const finalValue = Number.isNaN(v) ? 1600 : Math.min(5000, Math.max(400, v));
+                      setMaxDimInput(String(finalValue));
+                      handleScreenshotCompressionMaxDimChange(finalValue);
+                    }}
                     className="w-full h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
                   />
                   <p className="text-xs text-muted-foreground">
@@ -215,7 +252,7 @@ export const ScreenshotConfigs = ({
       <div id="system-audio" className="space-y-3 pt-4 border-t border-border/50">
         <Header
           title="System audio daemon"
-          description="Record the last N seconds of system audio in the background. Use the shortcut (e.g. Cmd+Shift+A) to attach that audio to the chat. macOS 14.2+ only; toggle in the main bar when enabled."
+          description="Record the last N seconds of system audio in the background. Use the shortcut (e.g. Cmd+Shift+S) to attach screenshot along with audio in chat. macOS 14.2+ only; toggle in the main bar when enabled."
         />
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -228,18 +265,21 @@ export const ScreenshotConfigs = ({
           {systemAudioDaemonConfig.enabled && (
             <div className="flex items-center justify-between gap-2">
               <Label className="text-sm">Buffer (seconds)</Label>
-              <input
-                type="number"
-                min={5}
-                max={300}
-                value={systemAudioDaemonConfig.bufferSeconds}
-                onChange={(e) =>
-                  handleSystemAudioDaemonBufferSecondsChange(
-                    parseInt(e.target.value, 10) || 30
-                  )
-                }
-                className="h-9 w-20 rounded-md border border-input bg-background px-2 text-sm"
-              />
+            <input
+              type="number"
+              min={5}
+              max={300}
+              value={bufferInput}
+              onChange={(e) => setBufferInput(e.target.value)}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value, 10);
+                const finalValue = Number.isNaN(v) ? 30 : Math.min(300, Math.max(5, v));
+                setBufferInput(String(finalValue));
+                handleSystemAudioDaemonBufferSecondsChange(finalValue);
+              }}
+              className="h-9 w-20 rounded-md border border-input bg-background px-2 text-sm"
+            />
+
             </div>
           )}
         </div>

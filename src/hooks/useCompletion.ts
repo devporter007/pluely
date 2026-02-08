@@ -61,6 +61,7 @@ export const useCompletion = () => {
     setScreenshotConfiguration,
     screenRecordingPermissionGranted,
     setScreenRecordingPermission,
+    systemAudioDaemonConfig,
   } = useApp();
 
   // Mark these as used to avoid TS6133 when some flows don't reference them directly
@@ -162,26 +163,6 @@ export const useCompletion = () => {
     setState((prev) => ({ ...prev, attachedFiles: [] }));
   }, []);
 
-  /** Add an audio file from base64 (e.g. from system audio daemon). */
-  const addFileFromBase64 = useCallback(
-    (base64: string, name: string, type: string) => {
-      const attachedFile: AttachedFile = {
-        id: Date.now().toString() + "_sys_audio",
-        name,
-        type,
-        base64,
-        size: base64.length,
-      };
-      setState((prev) => {
-        if (prev.attachedFiles.length >= MAX_FILES) return prev;
-        return {
-          ...prev,
-          attachedFiles: [...prev.attachedFiles, attachedFile],
-        };
-      });
-    },
-    []
-  );
     const saveCurrentConversation = useCallback(
     async (
       userMessage: string,
@@ -595,8 +576,8 @@ export const useCompletion = () => {
         if (audioBase64 && state.attachedFiles.length < MAX_FILES) {
           audioAttachedFile = {
             id: Date.now().toString() + "_audio",
-            name: `screenshot_audio_${Date.now()}.wav`,
-            type: "audio/wav",
+            name: `system_audio_${Date.now()}.ogg`,
+            type: "audio/ogg",
             base64: audioBase64,
             size: audioBase64.length,
           };
@@ -948,12 +929,22 @@ export const useCompletion = () => {
           compressionMaxDimension: config.compressionMaxDimension ?? 1600,
         });
 
+        // Grab system audio if daemon is on
+        let audioBase64: string | undefined;
+        if (systemAudioDaemonConfig.enabled) {
+          try {
+            audioBase64 = await invoke<string>("system_audio_get_recent_base64");
+          } catch (e) {
+            console.warn("Could not get system audio:", e);
+          }
+        }
+
         if (config.mode === "auto") {
           // Auto mode: Submit directly to AI with the configured prompt
-          await handleScreenshotSubmit(base64 as string, config.autoPrompt);
+          await handleScreenshotSubmit(base64 as string, config.autoPrompt, audioBase64);
         } else if (config.mode === "manual") {
           // Manual mode: Add to attached files without prompt
-          await handleScreenshotSubmit(base64 as string);
+          await handleScreenshotSubmit(base64 as string, undefined, audioBase64);
         }
         screenshotInitiatedByThisContext.current = false;
       } else {
@@ -973,36 +964,7 @@ export const useCompletion = () => {
         setIsScreenshotLoading(false);
       }
     }
-  }, [handleScreenshotSubmit]);
-
-  // When user presses "attach system audio" shortcut, get last N seconds from backend and add to chat
-  useEffect(() => {
-    let unlistenAttachAudio: (() => void) | undefined;
-    const setup = async () => {
-      unlistenAttachAudio = await listen("trigger-attach-system-audio", async () => {
-        try {
-          const base64 = await invoke<string>("system_audio_get_recent_base64");
-          if (base64) {
-            addFileFromBase64(
-              base64,
-              `system_audio_${Date.now()}.wav`,
-              "audio/wav"
-            );
-          }
-        } catch (e) {
-          console.warn("Attach system audio failed:", e);
-          setState((prev) => ({
-            ...prev,
-            error: e instanceof Error ? e.message : "Could not attach system audio. Is the daemon on?",
-          }));
-        }
-      });
-    };
-    setup();
-    return () => {
-      unlistenAttachAudio?.();
-    };
-  }, [addFileFromBase64]);
+  }, [handleScreenshotSubmit, systemAudioDaemonConfig.enabled]);
 
   useEffect(() => {
     let unlisten: any;
@@ -1022,12 +984,22 @@ export const useCompletion = () => {
         const config = screenshotConfigRef.current;
 
         try {
+          // Grab system audio if daemon is on
+          let audioBase64: string | undefined;
+          if (systemAudioDaemonConfig.enabled) {
+            try {
+              audioBase64 = await invoke<string>("system_audio_get_recent_base64");
+            } catch (e) {
+              console.warn("Could not get system audio:", e);
+            }
+          }
+
           if (config.mode === "auto") {
             // Auto mode: Submit directly to AI with the configured prompt
-            await handleScreenshotSubmit(base64 as string, config.autoPrompt);
+            await handleScreenshotSubmit(base64 as string, config.autoPrompt, audioBase64);
           } else if (config.mode === "manual") {
             // Manual mode: Add to attached files without prompt
-            await handleScreenshotSubmit(base64 as string);
+            await handleScreenshotSubmit(base64 as string, undefined, audioBase64);
           }
         } catch (error) {
           console.error("Error processing selection:", error);
@@ -1048,10 +1020,9 @@ export const useCompletion = () => {
         unlisten();
       }
     };
-  }, [handleScreenshotSubmit]);
+  }, [handleScreenshotSubmit, systemAudioDaemonConfig.enabled]);
 
-  useEffect(() => {
-    const unlisten = listen("capture-closed", () => {
+  useEffect(() => {    const unlisten = listen("capture-closed", () => {
       setIsScreenshotLoading(false);
       isProcessingScreenshotRef.current = false;
       screenshotInitiatedByThisContext.current = false;
