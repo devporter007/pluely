@@ -4,11 +4,16 @@ mod api;
 mod capture;
 mod db;
 mod shortcuts;
+mod system_audio;
 mod window;
-use std::sync::Mutex;
+
+#[cfg(target_os = "macos")]
+mod system_audio_macos;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_posthog::{init as posthog_init, PostHogConfig, PostHogOptions};
 use capture::CaptureState;
+use system_audio::SystemAudioState;
 
 #[cfg(target_os = "macos")]
 #[allow(deprecated)]
@@ -30,6 +35,7 @@ pub fn run() {
                 .build(),
         )
         .manage(CaptureState::default())
+        .manage(Arc::new(SystemAudioState::new()))
         .manage(shortcuts::WindowVisibility {
             is_hidden: Mutex::new(false),
         })
@@ -86,6 +92,11 @@ pub fn run() {
             activate::secure_storage_save,
             activate::secure_storage_get,
             activate::secure_storage_remove,
+            system_audio::system_audio_start,
+            system_audio::system_audio_stop,
+            system_audio::system_audio_get_recent_base64,
+            system_audio::system_audio_is_recording,
+            system_audio::system_audio_status,
             api::transcribe_audio,
             api::chat_stream_response,
             api::fetch_models,

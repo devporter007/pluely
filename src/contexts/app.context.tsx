@@ -16,7 +16,7 @@ import {
   CursorType,
   updateCursorType,
 } from "@/lib/storage";
-import { IContextType, ScreenshotConfig, TYPE_PROVIDER } from "@/types";
+import { IContextType, ScreenshotConfig, SystemAudioDaemonConfig, TYPE_PROVIDER } from "@/types";
 import curl2Json from "@bany/curl-to-json";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -107,6 +107,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       compressionEnabled: true,
       compressionQuality: 75,
       compressionMaxDimension: 1600,
+    });
+
+  const [systemAudioDaemonConfig, setSystemAudioDaemonConfig] =
+    useState<SystemAudioDaemonConfig>({
+      enabled: false,
+      bufferSeconds: 30,
     });
 
   // Unified Customizable State (initialize from persisted storage)
@@ -244,6 +250,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) {
         console.warn("Failed to parse screenshot config", err);
+      }
+    }
+
+    // Load system audio daemon configuration
+    const savedSystemAudioConfig = safeLocalStorage.getItem(
+      STORAGE_KEYS.SYSTEM_AUDIO_DAEMON_CONFIG
+    );
+    if (savedSystemAudioConfig) {
+      try {
+        const parsed = JSON.parse(savedSystemAudioConfig);
+        if (typeof parsed === "object" && parsed !== null) {
+          setSystemAudioDaemonConfig({
+            enabled: Boolean(parsed.enabled),
+            bufferSeconds:
+              typeof parsed.bufferSeconds === "number" &&
+              parsed.bufferSeconds >= 5 &&
+              parsed.bufferSeconds <= 300
+                ? parsed.bufferSeconds
+                : 30,
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to parse system audio daemon config", err);
       }
     }
 
@@ -485,6 +514,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         e.key === STORAGE_KEYS.SELECTED_STT_PROVIDER ||
         e.key === STORAGE_KEYS.SYSTEM_PROMPT ||
         e.key === STORAGE_KEYS.SCREENSHOT_CONFIG ||
+        e.key === STORAGE_KEYS.SYSTEM_AUDIO_DAEMON_CONFIG ||
         e.key === STORAGE_KEYS.CUSTOMIZABLE
       ) {
         loadData();
@@ -551,6 +581,32 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       );
     }
   }, [selectedSttProvider]);
+
+  // Persist system audio daemon config
+  useEffect(() => {
+    safeLocalStorage.setItem(
+      STORAGE_KEYS.SYSTEM_AUDIO_DAEMON_CONFIG,
+      JSON.stringify(systemAudioDaemonConfig)
+    );
+  }, [systemAudioDaemonConfig]);
+
+  // Apply system audio daemon to backend (start/stop)
+  useEffect(() => {
+    const apply = async () => {
+      try {
+        if (systemAudioDaemonConfig.enabled) {
+          await invoke("system_audio_start", {
+            bufferSeconds: systemAudioDaemonConfig.bufferSeconds,
+          });
+        } else {
+          await invoke("system_audio_stop");
+        }
+      } catch (e) {
+        console.debug("System audio daemon sync failed:", e);
+      }
+    };
+    apply();
+  }, [systemAudioDaemonConfig.enabled, systemAudioDaemonConfig.bufferSeconds]);
 
   // Computed all AI providers
   const allAiProviders: TYPE_PROVIDER[] = [
@@ -727,6 +783,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     onSetSelectedSttProvider,
     screenshotConfiguration,
     setScreenshotConfiguration,
+    systemAudioDaemonConfig,
+    setSystemAudioDaemonConfig,
     customizable,
     toggleAppIconVisibility,
     toggleAlwaysOnTop,

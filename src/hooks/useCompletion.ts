@@ -161,6 +161,27 @@ export const useCompletion = () => {
   const clearFiles = useCallback(() => {
     setState((prev) => ({ ...prev, attachedFiles: [] }));
   }, []);
+
+  /** Add an audio file from base64 (e.g. from system audio daemon). */
+  const addFileFromBase64 = useCallback(
+    (base64: string, name: string, type: string) => {
+      const attachedFile: AttachedFile = {
+        id: Date.now().toString() + "_sys_audio",
+        name,
+        type,
+        base64,
+        size: base64.length,
+      };
+      setState((prev) => {
+        if (prev.attachedFiles.length >= MAX_FILES) return prev;
+        return {
+          ...prev,
+          attachedFiles: [...prev.attachedFiles, attachedFile],
+        };
+      });
+    },
+    []
+  );
     const saveCurrentConversation = useCallback(
     async (
       userMessage: string,
@@ -953,6 +974,35 @@ export const useCompletion = () => {
       }
     }
   }, [handleScreenshotSubmit]);
+
+  // When user presses "attach system audio" shortcut, get last N seconds from backend and add to chat
+  useEffect(() => {
+    let unlistenAttachAudio: (() => void) | undefined;
+    const setup = async () => {
+      unlistenAttachAudio = await listen("trigger-attach-system-audio", async () => {
+        try {
+          const base64 = await invoke<string>("system_audio_get_recent_base64");
+          if (base64) {
+            addFileFromBase64(
+              base64,
+              `system_audio_${Date.now()}.wav`,
+              "audio/wav"
+            );
+          }
+        } catch (e) {
+          console.warn("Attach system audio failed:", e);
+          setState((prev) => ({
+            ...prev,
+            error: e instanceof Error ? e.message : "Could not attach system audio. Is the daemon on?",
+          }));
+        }
+      });
+    };
+    setup();
+    return () => {
+      unlistenAttachAudio?.();
+    };
+  }, [addFileFromBase64]);
 
   useEffect(() => {
     let unlisten: any;

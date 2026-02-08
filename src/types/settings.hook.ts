@@ -1,11 +1,17 @@
 import { TYPE_PROVIDER } from "./provider.type";
-import { ScreenshotConfig, ScreenshotMode } from "./settings";
+import { ScreenshotConfig, ScreenshotMode, SystemAudioDaemonConfig } from "./settings";
 
 export interface UseSettingsReturn {
   screenshotConfiguration: ScreenshotConfig;
   setScreenshotConfiguration: React.Dispatch<
     React.SetStateAction<ScreenshotConfig>
   >;
+  systemAudioDaemonConfig: SystemAudioDaemonConfig;
+  setSystemAudioDaemonConfig: React.Dispatch<
+    React.SetStateAction<SystemAudioDaemonConfig>
+  >;
+  handleSystemAudioDaemonEnabledChange: (enabled: boolean) => void;
+  handleSystemAudioDaemonBufferSecondsChange: (bufferSeconds: number) => void;
   handleScreenshotModeChange: (value: ScreenshotMode) => void;
   handleScreenshotPromptChange: (value: string) => void;
   handleScreenshotEnabledChange: (enabled: boolean) => void;

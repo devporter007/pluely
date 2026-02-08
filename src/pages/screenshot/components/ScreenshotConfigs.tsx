@@ -20,6 +20,9 @@ export const ScreenshotConfigs = ({
   handleScreenshotCompressionQualityChange,
   handleScreenshotCompressionMaxDimChange,
   handleScreenshotRecompressAttachmentsChange,
+  systemAudioDaemonConfig,
+  handleSystemAudioDaemonEnabledChange,
+  handleSystemAudioDaemonBufferSecondsChange,
   hasActiveLicense,
 }: UseSettingsReturn) => {
   return (
@@ -206,6 +209,40 @@ export const ScreenshotConfigs = ({
               </div>
             )}
 
+      </div>
+
+      {/* System audio daemon: record last N seconds of system audio, attach on shortcut */}
+      <div id="system-audio" className="space-y-3 pt-4 border-t border-border/50">
+        <Header
+          title="System audio daemon"
+          description="Record the last N seconds of system audio in the background. Use the shortcut (e.g. Cmd+Shift+A) to attach that audio to the chat. macOS 14.2+ only; toggle in the main bar when enabled."
+        />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Enable system audio daemon</Label>
+            <Switch
+              checked={systemAudioDaemonConfig.enabled}
+              onCheckedChange={handleSystemAudioDaemonEnabledChange}
+            />
+          </div>
+          {systemAudioDaemonConfig.enabled && (
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Buffer (seconds)</Label>
+              <input
+                type="number"
+                min={5}
+                max={300}
+                value={systemAudioDaemonConfig.bufferSeconds}
+                onChange={(e) =>
+                  handleSystemAudioDaemonBufferSecondsChange(
+                    parseInt(e.target.value, 10) || 30
+                  )
+                }
+                className="h-9 w-20 rounded-md border border-input bg-background px-2 text-sm"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tips */}

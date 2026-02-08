@@ -11,6 +11,8 @@ export const useSettings = () => {
   const {
     screenshotConfiguration,
     setScreenshotConfiguration,
+    systemAudioDaemonConfig,
+    setSystemAudioDaemonConfig,
     allAiProviders,
     allSttProviders,
     selectedAIProvider,
@@ -100,6 +102,25 @@ export const useSettings = () => {
     );
   };
 
+  const handleSystemAudioDaemonEnabledChange = (enabled: boolean) => {
+    const newConfig = { ...systemAudioDaemonConfig, enabled };
+    setSystemAudioDaemonConfig(newConfig);
+    safeLocalStorage.setItem(
+      STORAGE_KEYS.SYSTEM_AUDIO_DAEMON_CONFIG,
+      JSON.stringify(newConfig)
+    );
+  };
+
+  const handleSystemAudioDaemonBufferSecondsChange = (bufferSeconds: number) => {
+    const clamped = Math.min(300, Math.max(5, bufferSeconds));
+    const newConfig = { ...systemAudioDaemonConfig, bufferSeconds: clamped };
+    setSystemAudioDaemonConfig(newConfig);
+    safeLocalStorage.setItem(
+      STORAGE_KEYS.SYSTEM_AUDIO_DAEMON_CONFIG,
+      JSON.stringify(newConfig)
+    );
+  };
+
   useEffect(() => {
     if (selectedAIProvider.provider) {
       const provider = allAiProviders.find(
@@ -136,6 +157,10 @@ export const useSettings = () => {
   return {
     screenshotConfiguration,
     setScreenshotConfiguration,
+    systemAudioDaemonConfig,
+    setSystemAudioDaemonConfig,
+    handleSystemAudioDaemonEnabledChange,
+    handleSystemAudioDaemonBufferSecondsChange,
     handleScreenshotModeChange,
     handleScreenshotPromptChange,
     handleScreenshotEnabledChange,

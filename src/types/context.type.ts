@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction } from "react";
-import { ScreenshotConfig, TYPE_PROVIDER } from "@/types";
+import { ScreenshotConfig, SystemAudioDaemonConfig, TYPE_PROVIDER } from "@/types";
 import { CursorType, CustomizableState } from "@/lib/storage";
 
 export type IContextType = {
@@ -38,6 +38,8 @@ export type IContextType = {
   // Whether macOS Screen Recording permission has been granted
   screenRecordingPermissionGranted: boolean;
   setScreenRecordingPermission: (granted: boolean) => void;
+  systemAudioDaemonConfig: SystemAudioDaemonConfig;
+  setSystemAudioDaemonConfig: React.Dispatch<React.SetStateAction<SystemAudioDaemonConfig>>;
   customizable: CustomizableState;
   toggleAppIconVisibility: (isVisible: boolean) => Promise<void>;
   toggleAlwaysOnTop: (isEnabled: boolean) => Promise<void>;

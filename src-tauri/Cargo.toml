@@ -49,10 +49,15 @@ tauri-plugin-shell = "2.3.1"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-posthog = "0.2.4"
 tauri-plugin-machine-uid = "0.1.2"
+ringbuf = "0.4"
+hound = "3.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-macos-permissions = "2"
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
+objc2 = { version = "0.6", features = ["std"] }
+objc2-core-audio = "0.3"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSUUID", "NSValue", "alloc"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.5.0"

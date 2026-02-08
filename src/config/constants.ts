@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   RESPONSE_SETTINGS: "response_settings",
   SUPPORTS_IMAGES: "supports_images",
   SCREEN_RECORDING_GRANTED: "screen_recording_granted",
+  SYSTEM_AUDIO_DAEMON_CONFIG: "system_audio_daemon_config",
 } as const;
 
 // Max number of files that can be attached to a message
