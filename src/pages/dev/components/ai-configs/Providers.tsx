@@ -176,7 +176,9 @@ export const Providers = ({
       <div className="space-y-4 mt-2">
         {variables
           .filter(
-            (variable) => variable.key !== findKeyAndValue("api_key")?.key
+            (variable) =>
+              variable.key !== findKeyAndValue("api_key")?.key &&
+              variable.key !== "model"
           )
           .map((variable) => {
             const getVariableValue = () => {
@@ -223,6 +225,58 @@ export const Providers = ({
               </div>
             );
           })}
+
+        {/* Fast Model / Slow Model fields (only when provider has a MODEL variable) */}
+        {findKeyAndValue("model") ? (
+          <>
+            <div className="space-y-1">
+              <Header
+                title="Fast Model *"
+                description={`Required — the default model used for quick, low-latency responses from ${
+                  allAiProviders?.find(
+                    (p) => p?.id === selectedAIProvider?.provider
+                  )?.isCustom
+                    ? "Custom Provider"
+                    : selectedAIProvider?.provider
+                }.`}
+              />
+              <TextInput
+                placeholder={`Enter fast model name (e.g. gpt-4o-mini)`}
+                value={selectedAIProvider?.variables?.model || ""}
+                onChange={(value) => {
+                  if (!selectedAIProvider) return;
+                  onSetSelectedAIProvider({
+                    ...selectedAIProvider,
+                    variables: {
+                      ...selectedAIProvider.variables,
+                      model: value,
+                    },
+                  });
+                }}
+              />
+            </div>
+            <div className="space-y-1">
+              <Header
+                title="Slow Model"
+                description={`Optional — a higher-quality model for deeper, more capable responses. When configured, a toggle appears in the chat UI to switch between fast and slow.`}
+              />
+              <TextInput
+                placeholder={`Enter slow model name (optional)`}
+                value={selectedAIProvider?.variables?.slow_model || ""}
+                onChange={(value) => {
+                  if (!selectedAIProvider) return;
+                  onSetSelectedAIProvider({
+                    ...selectedAIProvider,
+                    variables: {
+                      ...selectedAIProvider.variables,
+                      slow_model: value,
+                    },
+                  });
+                }}
+              />
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );

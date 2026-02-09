@@ -62,7 +62,29 @@ export const useCompletion = () => {
     screenRecordingPermissionGranted,
     setScreenRecordingPermission,
     systemAudioDaemonConfig,
+    modelSpeed,
+    setModelSpeed,
   } = useApp();
+
+  // Whether a slow model is configured for the current provider
+  const hasSlowModel = Boolean(
+    selectedAIProvider?.variables?.slow_model?.trim()
+  );
+
+  /**
+   * Returns the selectedAIProvider with the MODEL variable swapped
+   * to slow_model when the toggle is set to "slow" and a slow model exists.
+   * The slow_model key itself is removed so it doesn't leak into the request.
+   */
+  const getEffectiveProvider = useCallback(() => {
+    const vars = { ...selectedAIProvider.variables };
+    if (modelSpeed === "slow" && vars.slow_model?.trim()) {
+      vars.model = vars.slow_model;
+    }
+    // Remove slow_model from variables so it's not sent as a placeholder
+    delete vars.slow_model;
+    return { ...selectedAIProvider, variables: vars };
+  }, [selectedAIProvider, modelSpeed]);
 
   // Mark these as used to avoid TS6133 when some flows don't reference them directly
   void screenRecordingPermissionGranted;
@@ -315,7 +337,7 @@ export const useCompletion = () => {
         try {
           for await (const chunk of fetchAIResponse({
             provider: usePluelyAPI ? undefined : provider,
-            selectedProvider: selectedAIProvider,
+            selectedProvider: getEffectiveProvider(),
             systemPrompt: systemPrompt || undefined,
             history: messageHistory,
             userMessage: input,
@@ -653,7 +675,7 @@ export const useCompletion = () => {
             // Use the fetchAIResponse function with image and signal
             for await (const chunk of fetchAIResponse({
               provider: usePluelyAPI ? undefined : provider,
-              selectedProvider: selectedAIProvider,
+              selectedProvider: getEffectiveProvider(),
               systemPrompt: systemPrompt || undefined,
               history: messageHistory,
               userMessage: promptForRequest,
@@ -1093,5 +1115,8 @@ export const useCompletion = () => {
     isScreenshotLoading,
     keepEngaged,
     setKeepEngaged,
+    modelSpeed,
+    setModelSpeed,
+    hasSlowModel,
   };
 };

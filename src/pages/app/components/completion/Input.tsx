@@ -34,6 +34,9 @@ export const Input = ({
   isHidden,
   keepEngaged,
   setKeepEngaged,
+  modelSpeed,
+  setModelSpeed,
+  hasSlowModel,
 }: UseCompletionReturn & { isHidden: boolean }) => {
   return (
     <div className="relative flex-1">
@@ -103,6 +106,33 @@ export const Input = ({
               </div>
             </div>
             <div className="flex items-center gap-2 select-none">
+              {/* Fast/Slow model toggle — only visible when slow model is configured */}
+              {hasSlowModel && (
+                <div className="flex flex-row items-center gap-1.5 mr-1">
+                  <button
+                    onClick={() => setModelSpeed("fast")}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                      modelSpeed === "fast"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/30 text-muted-foreground/60 border-input/50 hover:bg-muted/50"
+                    }`}
+                    title="Fast: lower latency, lower cost (provider dependent)"
+                  >
+                    Fast
+                  </button>
+                  <button
+                    onClick={() => setModelSpeed("slow")}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                      modelSpeed === "slow"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/30 text-muted-foreground/60 border-input/50 hover:bg-muted/50"
+                    }`}
+                    title="Slow: higher quality, potentially slower and more expensive"
+                  >
+                    Slow
+                  </button>
+                </div>
+              )}
               <div className="flex flex-row items-center gap-2 mr-2">
                 <p className="text-[10px]">{`Toggle ${
                   keepEngaged ? "AI response" : "conversation mode"

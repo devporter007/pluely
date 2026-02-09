@@ -79,6 +79,14 @@ export interface UseCompletionReturn {
   /** Function to toggle keep engaged mode */
   setKeepEngaged: Dispatch<SetStateAction<boolean>>;
 
+  // Model speed toggle
+  /** Current model speed: "fast" (default) or "slow" */
+  modelSpeed: "fast" | "slow";
+  /** Function to change model speed */
+  setModelSpeed: (speed: "fast" | "slow") => void;
+  /** Whether a slow model is configured for the current provider */
+  hasSlowModel: boolean;
+
   // Screenshot functionality
   /** Current screenshot configuration settings */
   screenshotConfiguration: any;

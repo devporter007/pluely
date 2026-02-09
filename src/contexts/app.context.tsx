@@ -167,6 +167,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     safeLocalStorage.setItem(STORAGE_KEYS.SUPPORTS_IMAGES, String(value));
   };
 
+  // Model speed toggle state (fast/slow) — session-scoped, defaults to "fast"
+  const [modelSpeed, setModelSpeed] = useState<"fast" | "slow">("fast");
+
   // Pluely API State
   const [pluelyApiEnabled, setPluelyApiEnabledState] = useState<boolean>(
     safeLocalStorage.getItem(STORAGE_KEYS.PLUELY_API_ENABLED) === "true"
@@ -800,6 +803,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setSupportsImages,
     screenRecordingPermissionGranted,
     setScreenRecordingPermission,
+    modelSpeed,
+    setModelSpeed,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
