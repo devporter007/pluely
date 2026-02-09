@@ -51,5 +51,15 @@ export const DEFAULT_SHORTCUT_ACTIONS: ShortcutAction[] = [
       linux: "ctrl+shift+s",
     },
   },
+  {
+    id: "toggle_system_audio",
+    name: "Toggle System Audio",
+    description: "Enable/Disable the system audio daemon",
+    defaultKey: {
+      macos: "cmd+shift+m",
+      windows: "ctrl+shift+m",
+      linux: "ctrl+shift+m",
+    },
+  },
 
 ];

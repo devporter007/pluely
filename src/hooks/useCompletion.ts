@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useWindowResize } from "./useWindow";
 import { useGlobalShortcuts } from "@/hooks";
-import { MAX_FILES } from "@/config";
+import { MAX_FILES, STORAGE_KEYS } from "@/config";
 import { useApp } from "@/contexts";
 import {
   fetchAIResponse,
@@ -14,6 +14,7 @@ import {
   generateMessageId,
   generateRequestId,
   getResponseSettings,
+  safeLocalStorage,
 } from "@/lib";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -62,6 +63,7 @@ export const useCompletion = () => {
     screenRecordingPermissionGranted,
     setScreenRecordingPermission,
     systemAudioDaemonConfig,
+    setSystemAudioDaemonConfig,
     modelSpeed,
     setModelSpeed,
   } = useApp();
@@ -1070,11 +1072,30 @@ export const useCompletion = () => {
   useEffect(() => {
     globalShortcuts.registerInputRef(inputRef.current);
     globalShortcuts.registerScreenshotCallback(captureScreenshot);
+    globalShortcuts.registerCustomShortcutCallback(
+      "toggle_system_audio",
+      () => {
+        const newEnabled = !systemAudioDaemonConfig.enabled;
+        const newConfig = { ...systemAudioDaemonConfig, enabled: newEnabled };
+        setSystemAudioDaemonConfig(newConfig);
+        safeLocalStorage.setItem(
+          STORAGE_KEYS.SYSTEM_AUDIO_DAEMON_CONFIG,
+          JSON.stringify(newConfig)
+        );
+      }
+    );
+    return () => {
+      globalShortcuts.unregisterCustomShortcutCallback("toggle_system_audio");
+    };
   }, [
     globalShortcuts.registerInputRef,
     globalShortcuts.registerScreenshotCallback,
+    globalShortcuts.registerCustomShortcutCallback,
+    globalShortcuts.unregisterCustomShortcutCallback,
     captureScreenshot,
     inputRef,
+    setSystemAudioDaemonConfig,
+    systemAudioDaemonConfig,
   ]);
 
   return {
