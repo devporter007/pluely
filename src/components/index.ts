@@ -1,4 +1,5 @@
-export * from "./updater";
+// DISABLED: updater component — uncomment to re-enable
+// export * from "./updater";
 export * from "./ui";
 export * from "./Markdown";
 export * from "./Header";

@@ -54,7 +54,7 @@ export const AI_PROVIDERS = [
 
   {
     id: "gemini-multimodal",
-    curl: `curl 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent' \
+    curl: `curl 'https://generativelanguage.googleapis.com/v1beta/models/{{MODEL}}:generateContent' \
   -H "Content-Type: application/json" \
   -H "x-goog-api-key: {{API_KEY}}" \
   -X POST \

@@ -118,10 +118,10 @@ export const Updater = () => {
     }
   };
 
-  // Check for updates on component mount
-  useEffect(() => {
-    checkForUpdates();
-  }, []);
+  // DISABLED: auto-check for updates on mount — uncomment to re-enable
+  // useEffect(() => {
+  //   checkForUpdates();
+  // }, []);
 
   // Handle window resizing when popover opens/closes
   useEffect(() => {

@@ -3,11 +3,12 @@
 This is a fork of Pluely with no bullshit attached.
 
 **Extra features:**
-- Completely stripped off license logic
+- Completely stripped off license logic with updater logic removed to avoid conflicts.
 - Auto screenshot upload with automatic prompt on key press
-- Multi-Modal Gemini Support(in built audio, image)(gemini-2.5-flash-lite-preview-09-2025, edit model from ai-providers-constants.rs)
+- Multi-Modal Gemini Support(in built audio, image)
 - Ability to attach system audio automatically in compressed opus 16khz mono form to get quick insights while using auto screenshot upload feature (Only supported for Macs, will look into windows/linux later)
 ---
+
 
 **Undetectable Everywhere:**
 

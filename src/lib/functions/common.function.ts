@@ -216,7 +216,10 @@ export function deepVariableReplacer(
   if (typeof node === "string") {
     let result = node;
     for (const [key, value] of Object.entries(variables)) {
+      // Match normal {{KEY}} placeholders
       result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
+      // Match URL-encoded %7B%7BKEY%7D%7D placeholders (curl parsers encode braces in URLs)
+      result = result.replace(new RegExp(`%7B%7B${key}%7D%7D`, "gi"), value);
     }
     return result;
   }
