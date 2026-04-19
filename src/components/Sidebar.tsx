@@ -21,7 +21,7 @@ export const Sidebar = () => {
     
         <div className="flex flex-col">
           <h1 className="text-xs lg:text-md font-semibold text-foreground transition-all duration-300">
-            Runningbord but better
+            Runningbord
           </h1>
           <span className="text-[8px] lg:text-[10px] text-muted-foreground -mt-1 block">
             {isLoading ? "Loading..." : `(v${version})`}

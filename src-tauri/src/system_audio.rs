@@ -9,7 +9,9 @@
 use base64::Engine;
 use serde::Serialize;
 use std::io::Cursor;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::Write;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -29,6 +31,9 @@ pub struct SystemAudioState {
     capacity: usize,
     /// Number of samples to return in get_recent (logical_seconds * rate * ch).
     logical_len: Mutex<usize>,
+    /// Total number of samples successfully written to the ring buffer since
+    /// the current capture session started.
+    written_samples: AtomicUsize,
     /// Whether the daemon is currently recording.
     recording: AtomicBool,
     /// Join handle for the capture thread (macOS only).
@@ -51,9 +56,21 @@ impl SystemAudioState {
             ring: Mutex::new((vec![0.0; capacity], 0)),
             capacity,
             logical_len: Mutex::new(logical_len),
+            written_samples: AtomicUsize::new(0),
             recording: AtomicBool::new(false),
             capture_handle: Mutex::new(None),
         }
+    }
+
+    /// Clear ring state at session start so short recordings don't include
+    /// stale or zero-padded history from previous sessions.
+    pub fn reset_capture_state(&self) {
+        if let Ok(mut ring) = self.ring.lock() {
+            let (buf, idx) = &mut *ring;
+            buf.fill(0.0);
+            *idx = 0;
+        }
+        self.written_samples.store(0, Ordering::SeqCst);
     }
 
     /// Set logical buffer length (samples to keep/return) for next start. Call before start.
@@ -117,6 +134,8 @@ impl SystemAudioState {
                 buf[..len - first_part].copy_from_slice(&src[first_part..]);
                 *idx = len - first_part;
             }
+
+            self.written_samples.fetch_add(len, Ordering::Relaxed);
         }
     }
 
@@ -125,26 +144,32 @@ impl SystemAudioState {
     /// and return the result as a base64 string.
     pub fn get_recent_base64(&self) -> Result<String, String> {
         let logical_len = *self.logical_len.lock().map_err(|e| e.to_string())?;
+        let captured = self.written_samples.load(Ordering::Acquire);
+        let available_len = logical_len.min(captured.min(self.capacity));
+
+        if available_len == 0 {
+            return Err("No audio recorded yet".to_string());
+        }
 
         let ordered = {
             // Lock, copy only the requested slice, and unlock immediately.
             let ring = self.ring.lock().map_err(|e| e.to_string())?;
             let (buf, write_index) = &*ring;
 
-            if buf.is_empty() || logical_len == 0 {
+            if buf.is_empty() {
                 return Err("No audio recorded yet".to_string());
             }
 
             let cap = self.capacity;
-            let mut temp_ordered: Vec<f32> = Vec::with_capacity(logical_len);
-            let start = (*write_index + cap - logical_len) % cap;
+            let mut temp_ordered: Vec<f32> = Vec::with_capacity(available_len);
+            let start = (*write_index + cap - available_len) % cap;
 
-            if start + logical_len <= cap {
-                temp_ordered.extend_from_slice(&buf[start..start + logical_len]);
+            if start + available_len <= cap {
+                temp_ordered.extend_from_slice(&buf[start..start + available_len]);
             } else {
                 let first_part = cap - start;
                 temp_ordered.extend_from_slice(&buf[start..cap]);
-                temp_ordered.extend_from_slice(&buf[..logical_len - first_part]);
+                temp_ordered.extend_from_slice(&buf[..available_len - first_part]);
             }
             temp_ordered
         };
@@ -362,6 +387,7 @@ pub async fn system_audio_start(
         return Ok(());
     }
     state.set_buffer_seconds(buffer_seconds);
+    state.reset_capture_state();
     // Set recording true before spawning capture so the thread sees it
     state.recording.store(true, Ordering::SeqCst);
     #[cfg(target_os = "macos")]
@@ -481,4 +507,75 @@ pub async fn system_audio_save_ogg_base64(
     std::fs::write(&path, bytes).map_err(|e| format!("Failed to save audio file: {}", e))?;
 
     Ok(Some(path.to_string_lossy().to_string()))
+}
+
+/// Convert base64-encoded OGG/Opus audio to base64 MP3 in memory.
+/// Uses ffmpeg via stdin/stdout piping so no temporary files are written.
+#[tauri::command]
+pub async fn system_audio_convert_ogg_to_mp3_base64(
+    audio_base64: String,
+) -> Result<String, String> {
+    let trimmed = audio_base64.trim();
+    let base64_str = if let Some(idx) = trimmed.find(',') {
+        &trimmed[idx + 1..]
+    } else {
+        trimmed
+    };
+
+    let ogg_bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_str)
+        .map_err(|e| format!("Invalid base64 audio payload: {}", e))?;
+
+    let mut child = Command::new("ffmpeg")
+        .arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-f")
+        .arg("ogg")
+        .arg("-i")
+        .arg("pipe:0")
+        .arg("-vn")
+        .arg("-ar")
+        .arg("16000")
+        .arg("-ac")
+        .arg("1")
+        .arg("-f")
+        .arg("mp3")
+        .arg("pipe:1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            format!(
+                "Failed to start ffmpeg for local audio conversion: {}. Install ffmpeg or disable local audio.",
+                e
+            )
+        })?;
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(&ogg_bytes)
+            .map_err(|e| format!("Failed to write audio to ffmpeg stdin: {}", e))?;
+    } else {
+        return Err("Failed to open ffmpeg stdin".to_string());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to read ffmpeg output: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "ffmpeg audio conversion failed: {}",
+            stderr.trim()
+        ));
+    }
+
+    if output.stdout.is_empty() {
+        return Err("ffmpeg produced empty MP3 output".to_string());
+    }
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(output.stdout))
 }

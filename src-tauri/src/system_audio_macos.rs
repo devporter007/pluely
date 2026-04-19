@@ -4,6 +4,7 @@
 use crate::system_audio::{AudioConverter, SystemAudioState};
 use std::ffi::{c_char, c_void, CStr};
 use std::ptr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::thread;
 use std::time::Duration;
@@ -189,6 +190,8 @@ unsafe extern "C" fn audio_io_proc_callback(
     _output_time: *const c_void,
     client_data: *mut c_void,
 ) -> OSStatus {
+    static CALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
+
     if client_data.is_null() || input_data.is_null() {
         return 0;
     }
@@ -209,6 +212,7 @@ unsafe extern "C" fn audio_io_proc_callback(
 
     let mut interleaved: Vec<f32> = Vec::new();
     let mut source_channels: u16 = 0;
+    let mut empty_buffers: usize = 0;
 
     // One buffer with multiple channels (interleaved)
     if n == 1 {
@@ -218,6 +222,8 @@ unsafe extern "C" fn audio_io_proc_callback(
             let samples = std::slice::from_raw_parts(buf.data as *const f32, num_samples);
             interleaved.extend_from_slice(samples);
             source_channels = buf._number_channels.max(1) as u16;
+        } else {
+            empty_buffers += 1;
         }
     } else {
         // Multiple buffers are typically planar channels. Interleave by frame.
@@ -225,6 +231,7 @@ unsafe extern "C" fn audio_io_proc_callback(
         let mut min_samples = usize::MAX;
         for buf in buffers {
             if buf.data.is_null() || buf.data_byte_size == 0 {
+                empty_buffers += 1;
                 continue;
             }
             let num_samples = buf.data_byte_size as usize / std::mem::size_of::<f32>();
@@ -245,7 +252,43 @@ unsafe extern "C" fn audio_io_proc_callback(
     }
 
     if source_channels == 0 || interleaved.is_empty() {
+        let cb = CALLBACK_COUNT.fetch_add(1, Ordering::Relaxed);
+        if cb % 50 == 0 {
+            tracing::debug!(
+                cb = cb,
+                n_buffers = n,
+                source_ch = source_channels,
+                frames = 0,
+                rms = 0.0f32,
+                empty_buffers = empty_buffers,
+                "IOProc delivery"
+            );
+            eprintln!(
+                "[IOProc delivery] cb={} n_buffers={} source_ch={} frames=0 rms=0.0 empty_buffers={}",
+                cb, n, source_channels, empty_buffers
+            );
+        }
         return 0;
+    }
+
+    let cb = CALLBACK_COUNT.fetch_add(1, Ordering::Relaxed);
+    if cb % 50 == 0 {
+        let total_frames = interleaved.len() / source_channels as usize;
+        let sum_sq: f32 = interleaved.iter().map(|x| x * x).sum();
+        let rms = (sum_sq / interleaved.len() as f32).sqrt();
+        tracing::debug!(
+            cb = cb,
+            n_buffers = n,
+            source_ch = source_channels,
+            frames = total_frames,
+            rms = rms,
+            empty_buffers = empty_buffers,
+            "IOProc delivery"
+        );
+        eprintln!(
+            "[IOProc delivery] cb={} n_buffers={} source_ch={} frames={} rms={} empty_buffers={}",
+            cb, n, source_channels, total_frames, rms, empty_buffers
+        );
     }
 
     if let Ok(mut converter) = context.converter.try_lock() {
